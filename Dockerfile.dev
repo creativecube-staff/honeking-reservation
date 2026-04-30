@@ -1,0 +1,21 @@
+# 開発用イメージ。本番用 Dockerfile は Phase 5 で別途追加する。
+FROM node:24-alpine
+
+WORKDIR /app
+
+# 依存マニフェストのみ先にコピー（package.json 変更時のみ npm ci が走る）
+COPY package.json package-lock.json ./
+
+RUN npm ci
+
+# ソースコードは bind mount で渡すため COPY しない
+
+EXPOSE 3000 24678
+
+# Nuxt dev を 0.0.0.0 で listen させ、macOS の Docker Desktop でも HMR を効かせる
+ENV HOST=0.0.0.0 \
+    PORT=3000 \
+    CHOKIDAR_USEPOLLING=true \
+    WATCHPACK_POLLING=true
+
+CMD ["npm", "run", "dev"]

@@ -27,7 +27,7 @@
 | カレンダー(管理) | FullCalendar(Resource Timeline) |
 | 認証(管理画面) | nuxt-auth-utils |
 | バリデーション | VeeValidate + Zod |
-| 実行環境(開発) | Node.js 直接 |
+| 実行環境(開発) | Docker Compose（ローカル）|
 | 実行環境(本番) | Docker Compose on VPS |
 | デプロイ先 | VPS(Xserver VPS / さくらVPS) |
 

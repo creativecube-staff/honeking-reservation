@@ -1,0 +1,28 @@
+# 開発用 docker compose。本番用は Phase 5 で docker-compose.prod.yml を別途作成する。
+services:
+  nuxt:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: honeking-nuxt-dev
+    ports:
+      - "3000:3000"      # Nuxt dev server
+      - "24678:24678"    # Vite HMR
+    volumes:
+      # ソースコードを bind mount（編集を即反映）
+      - .:/app
+      # コンテナ内 node_modules はホスト側で上書きさせない（macOS でのパフォーマンス対策）
+      - /app/node_modules
+      # ビルド成果物もホストと分離
+      - /app/.nuxt
+      - /app/.output
+    env_file:
+      # .env が未作成でも compose を起動できるよう optional 指定
+      - path: .env
+        required: false
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true
+    init: true
+    tty: true
+    stdin_open: true

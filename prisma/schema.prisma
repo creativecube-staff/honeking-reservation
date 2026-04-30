@@ -25,6 +25,8 @@ model Store {
   beds          Bed[]
   practitioners Practitioner[]
   menus         Menu[]
+  businessHours BusinessHour[]
+  holidays      Holiday[]
 }
 
 // ベッド（店舗ごとに3〜4台）
@@ -53,7 +55,8 @@ model Practitioner {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  store Store @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  store  Store   @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  shifts Shift[]
 
   @@index([storeId])
 }
@@ -74,4 +77,55 @@ model Menu {
 
   @@unique([storeId, name])
   @@index([storeId])
+}
+
+// 曜日別営業時間（店舗ごとに7行: 日〜土）
+model BusinessHour {
+  id             Int      @id @default(autoincrement())
+  storeId        Int
+  dayOfWeek      Int // 0=日, 1=月, 2=火, 3=水, 4=木, 5=金, 6=土
+  isClosed       Boolean  @default(false)
+  openTime       String? // "HH:MM"
+  closeTime      String? // "HH:MM"
+  breakStartTime String? // "HH:MM"
+  breakEndTime   String? // "HH:MM"
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Restrict)
+
+  @@unique([storeId, dayOfWeek])
+  @@index([storeId])
+}
+
+// 不定期休業日（年末年始・お盆・特別休業など）
+model Holiday {
+  id        Int      @id @default(autoincrement())
+  storeId   Int
+  date      DateTime @db.Date
+  note      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Restrict)
+
+  @@unique([storeId, date])
+  @@index([storeId, date])
+}
+
+// 施術者シフト（1施術者×1日=1行）
+model Shift {
+  id             Int      @id @default(autoincrement())
+  practitionerId Int
+  date           DateTime @db.Date
+  startTime      String // "HH:MM"
+  endTime        String // "HH:MM"
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  practitioner Practitioner @relation(fields: [practitionerId], references: [id], onDelete: Restrict)
+
+  @@unique([practitionerId, date])
+  @@index([practitionerId, date])
+  @@index([date])
 }

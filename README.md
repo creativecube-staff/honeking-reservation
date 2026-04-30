@@ -19,7 +19,7 @@
 
 | 領域 | 採用技術 |
 |---|---|
-| フレームワーク | Nuxt 3 (TypeScript) |
+| フレームワーク | Nuxt 4 (TypeScript) |
 | UI | Nuxt UI + Tailwind CSS |
 | ORM | Prisma |
 | DB(開発・本番とも) | Supabase PostgreSQL(東京リージョン) |

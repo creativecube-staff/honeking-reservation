@@ -11,10 +11,14 @@
   },
   "dependencies": {
     "@nuxt/ui": "^4.7.1",
+    "@prisma/client": "^6.19.3",
     "nuxt": "^4.4.2",
     "tailwindcss": "^4.2.4",
     "typescript": "^6.0.3",
     "vue": "^3.5.33",
     "vue-router": "^5.0.6"
+  },
+  "devDependencies": {
+    "prisma": "^6.19.3"
   }
 }

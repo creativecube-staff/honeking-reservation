@@ -1,0 +1,18 @@
+# Cursor のインデックスおよび AI コンテキストから除外するファイル
+# .gitignore と同じ書式
+
+# 環境変数（機密情報を含む）
+.env
+.env.*
+!.env.example
+
+# 依存ライブラリ
+node_modules
+
+# Nuxt ビルド成果物
+.nuxt
+.output
+.cache
+.data
+.nitro
+dist

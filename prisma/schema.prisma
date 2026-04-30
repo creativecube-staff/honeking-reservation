@@ -1,6 +1,5 @@
 // Prisma schema for honeking-reservation
-// Phase 1 (Step 1-4): wiring sanity check only.
-// PingTest は Phase 2 開始時に削除し、Store / Bed / Practitioner / Menu / ... の本テーブルへ差し替える。
+// Phase 2 開始: ここから本テーブル設計を順次追加していく。
 
 generator client {
   provider = "prisma-client-js"
@@ -10,10 +9,4 @@ datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
-}
-
-model PingTest {
-  id        Int      @id @default(autoincrement())
-  note      String
-  createdAt DateTime @default(now())
 }

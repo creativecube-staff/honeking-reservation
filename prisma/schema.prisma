@@ -27,6 +27,7 @@ model Store {
   menus         Menu[]
   businessHours BusinessHour[]
   holidays      Holiday[]
+  reservations  Reservation[]
 }
 
 // ベッド（店舗ごとに3〜4台）
@@ -39,7 +40,8 @@ model Bed {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  store Store @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  store        Store         @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  reservations Reservation[]
 
   @@unique([storeId, name])
   @@index([storeId])
@@ -55,8 +57,9 @@ model Practitioner {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  store  Store   @relation(fields: [storeId], references: [id], onDelete: Restrict)
-  shifts Shift[]
+  store        Store         @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  shifts       Shift[]
+  reservations Reservation[]
 
   @@index([storeId])
 }
@@ -73,7 +76,8 @@ model Menu {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  store Store @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  store        Store         @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  reservations Reservation[]
 
   @@unique([storeId, name])
   @@index([storeId])
@@ -128,4 +132,57 @@ model Shift {
   @@unique([practitionerId, date])
   @@index([practitionerId, date])
   @@index([date])
+}
+
+// 予約ステータス
+enum ReservationStatus {
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+  NO_SHOW
+}
+
+// 顧客（個人情報は AES-256-GCM で暗号化された値を保存。検索は *Hash カラムで行う）
+model Customer {
+  id        Int      @id @default(autoincrement())
+  name      String
+  nameHash  String   @unique
+  phone     String?
+  phoneHash String?  @unique
+  email     String?
+  emailHash String?  @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  reservations Reservation[]
+}
+
+// 予約（1ベッド + 1施術者 + 1メニュー + 時間帯）
+model Reservation {
+  id               Int               @id @default(autoincrement())
+  storeId          Int
+  bedId            Int
+  practitionerId   Int
+  menuId           Int
+  customerId       Int
+  startAt          DateTime
+  endAt            DateTime
+  status           ReservationStatus @default(CONFIRMED)
+  confirmationCode String            @unique
+  note             String?
+  cancelledAt      DateTime?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  store        Store        @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  bed          Bed          @relation(fields: [bedId], references: [id], onDelete: Restrict)
+  practitioner Practitioner @relation(fields: [practitionerId], references: [id], onDelete: Restrict)
+  menu         Menu         @relation(fields: [menuId], references: [id], onDelete: Restrict)
+  customer     Customer     @relation(fields: [customerId], references: [id], onDelete: Restrict)
+
+  @@index([storeId, startAt])
+  @@index([practitionerId, startAt])
+  @@index([bedId, startAt])
+  @@index([customerId])
+  @@index([startAt])
 }

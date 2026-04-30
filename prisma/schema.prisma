@@ -1,5 +1,5 @@
 // Prisma schema for honeking-reservation
-// Phase 2 開始: ここから本テーブル設計を順次追加していく。
+// Phase 2: ここから本テーブル設計を順次追加していく。
 
 generator client {
   provider = "prisma-client-js"
@@ -9,4 +9,69 @@ datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
+}
+
+// 店舗マスタ
+model Store {
+  id           Int      @id @default(autoincrement())
+  name         String
+  address      String
+  phone        String?
+  displayOrder Int      @default(0)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  beds          Bed[]
+  practitioners Practitioner[]
+  menus         Menu[]
+}
+
+// ベッド（店舗ごとに3〜4台）
+model Bed {
+  id           Int      @id @default(autoincrement())
+  storeId      Int
+  name         String
+  displayOrder Int      @default(0)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Restrict)
+
+  @@unique([storeId, name])
+  @@index([storeId])
+}
+
+// 施術者（店舗固定、掛け持ちなし）
+model Practitioner {
+  id           Int      @id @default(autoincrement())
+  storeId      Int
+  name         String
+  displayOrder Int      @default(0)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Restrict)
+
+  @@index([storeId])
+}
+
+// メニュー（店舗ごと個別）
+model Menu {
+  id              Int      @id @default(autoincrement())
+  storeId         Int
+  name            String
+  durationMinutes Int
+  priceJpy        Int
+  displayOrder    Int      @default(0)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Restrict)
+
+  @@unique([storeId, name])
+  @@index([storeId])
 }

@@ -103,6 +103,7 @@ model BusinessHour {
 }
 
 // 不定期休業日（年末年始・お盆・特別休業など）
+// 営業しない日。Holiday に該当する日は予約枠ゼロ。
 model Holiday {
   id        Int      @id @default(autoincrement())
   storeId   Int
@@ -115,6 +116,16 @@ model Holiday {
 
   @@unique([storeId, date])
   @@index([storeId, date])
+}
+
+// 国の祝日（全店舗共通・営業はするが「日曜扱い」で運用）
+// アプリ層は date が PublicHoliday に該当する日は BusinessHour の dayOfWeek=0（日曜）を引く。
+model PublicHoliday {
+  id        Int      @id @default(autoincrement())
+  date      DateTime @unique @db.Date
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // 施術者シフト（1施術者×1日=1行）

@@ -31,11 +31,6 @@ const periodFmt = new Intl.DateTimeFormat('ja-JP', {
 })
 const priceFmt = new Intl.NumberFormat('ja-JP')
 
-function toIsoDate(d: Date | string | null | undefined): string {
-  if (!d) return ''
-  return new Date(d).toISOString().slice(0, 10)
-}
-
 function formatPeriod(from: Date | string | null | undefined, until: Date | string | null | undefined): string | null {
   if (!from && !until) return null
   const f = from ? periodFmt.format(new Date(from)) : '常時'
@@ -50,6 +45,7 @@ const editorMode = ref<EditorMode>('create')
 const editingId = ref<number | null>(null)
 const state = reactive<MenuFormState>({
   name: '',
+  description: '',
   durationMinutes: 30,
   priceJpy: 4000,
   displayOrder: 0,
@@ -61,8 +57,14 @@ const fieldErrors = ref<Record<string, string>>({})
 const formError = ref<string | null>(null)
 const submitting = ref(false)
 
+function toIsoDate(d: Date | string | null | undefined): string {
+  if (!d) return ''
+  return new Date(d).toISOString().slice(0, 10)
+}
+
 function resetForm() {
   state.name = ''
+  state.description = ''
   state.durationMinutes = 30
   state.priceJpy = 4000
   state.displayOrder = 0
@@ -86,6 +88,7 @@ function openEdit(menu: Menu) {
   editorMode.value = 'edit'
   editingId.value = menu.id
   state.name = menu.name
+  state.description = menu.description ?? ''
   state.durationMinutes = menu.durationMinutes
   state.priceJpy = menu.priceJpy
   state.displayOrder = menu.displayOrder
@@ -101,9 +104,10 @@ async function onSave() {
   fieldErrors.value = {}
   formError.value = null
 
-  // 空文字の availableFrom/availableUntil は null として送る
+  // 空文字の availableFrom/availableUntil/description は null として送る
   const payload = {
     ...state,
+    description: state.description?.trim() || null,
     availableFrom: state.availableFrom || null,
     availableUntil: state.availableUntil || null,
   }
@@ -234,6 +238,9 @@ const errInput = 'border-red-600 focus:border-red-600 focus:shadow-[0_0_0_1px_#d
               表示順
             </th>
             <th class="px-3 py-2.5 text-left font-semibold border-b border-[#c3c4c7]">
+              表示期間
+            </th>
+            <th class="px-3 py-2.5 text-left font-semibold border-b border-[#c3c4c7]">
               状態
             </th>
             <th class="px-3 py-2.5 text-left font-semibold border-b border-[#c3c4c7]">
@@ -243,7 +250,7 @@ const errInput = 'border-red-600 focus:border-red-600 focus:shadow-[0_0_0_1px_#d
         </thead>
         <tbody>
           <tr v-if="(menus ?? []).length === 0">
-            <td colspan="6" class="px-3 py-6 text-center text-slate-500">
+            <td colspan="7" class="px-3 py-6 text-center text-slate-500">
               まだメニューが登録されていません。右上の「+ メニューを追加」から追加してください。
             </td>
           </tr>
@@ -257,10 +264,10 @@ const errInput = 'border-red-600 focus:border-red-600 focus:shadow-[0_0_0_1px_#d
                 {{ m.name }}
               </div>
               <div
-                v-if="formatPeriod(m.availableFrom, m.availableUntil)"
-                class="inline-flex items-center gap-1 mt-1 text-[10px] text-purple-800 bg-purple-50 border border-purple-200 px-1.5 py-0.5 rounded-sm tabular-nums"
+                v-if="m.description"
+                class="text-xs text-slate-600 mt-0.5 line-clamp-2 whitespace-pre-line"
               >
-                期間: {{ formatPeriod(m.availableFrom, m.availableUntil) }}
+                {{ m.description }}
               </div>
               <div class="text-xs text-slate-600 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button
@@ -300,6 +307,15 @@ const errInput = 'border-red-600 focus:border-red-600 focus:shadow-[0_0_0_1px_#d
             </td>
             <td class="px-3 py-2.5 align-top text-right tabular-nums">
               {{ m.displayOrder }}
+            </td>
+            <td class="px-3 py-2.5 align-top text-xs tabular-nums">
+              <span
+                v-if="formatPeriod(m.availableFrom, m.availableUntil)"
+                class="inline-flex items-center text-purple-800 bg-purple-50 border border-purple-200 px-1.5 py-0.5 rounded-sm"
+              >
+                {{ formatPeriod(m.availableFrom, m.availableUntil) }}
+              </span>
+              <span v-else class="text-slate-400">常時</span>
             </td>
             <td class="px-3 py-2.5 align-top">
               <span
@@ -352,6 +368,24 @@ const errInput = 'border-red-600 focus:border-red-600 focus:shadow-[0_0_0_1px_#d
               >
               <p v-if="fieldErrors.name" class="mt-1 text-xs text-red-700">
                 {{ fieldErrors.name }}
+              </p>
+            </div>
+
+            <div>
+              <label class="block text-sm font-semibold text-slate-900 mb-1.5">
+                施術の説明（任意）
+              </label>
+              <textarea
+                v-model="state.description"
+                rows="3"
+                placeholder="例: 全身の筋肉のコリをほぐし、骨格バランスを整える施術です。"
+                :class="[baseInput, fieldErrors.description && errInput]"
+              />
+              <p v-if="fieldErrors.description" class="mt-1 text-xs text-red-700">
+                {{ fieldErrors.description }}
+              </p>
+              <p v-else class="mt-1 text-xs text-slate-500">
+                お客様の予約画面でメニューを選ぶときに表示されます。
               </p>
             </div>
 

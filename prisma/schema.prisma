@@ -79,6 +79,7 @@ model Menu {
   id              Int       @id @default(autoincrement())
   storeId         Int?
   name            String
+  description     String? // 施術の説明（任意・複数行可）
   durationMinutes Int
   priceJpy        Int
   displayOrder    Int       @default(0)

@@ -14,8 +14,8 @@ const { data: apiRows, refresh, error } = await useFetch<ApiRow[]>(
 )
 
 // ── 時刻ヘルパー ──────────────────────────────────────
-// 週間プレビューの時刻範囲（6:00 - 22:00、1 時間 = 36px、合計 576px）
-const HOUR_START = 6
+// 週間プレビューの時刻範囲（7:00 - 22:00、1 時間 = 36px、合計 540px）
+const HOUR_START = 7
 const HOUR_END = 22
 const HOUR_PX = 36
 const SNAP_MIN = 15
@@ -390,7 +390,10 @@ async function onSave() {
             <div
               v-for="h in HOURS"
               :key="h"
-              class="absolute left-0 right-0 text-[10px] text-slate-500 pr-1 text-right -translate-y-1.5"
+              class="absolute left-0 right-0 text-[10px] text-slate-500 pr-1 text-right"
+              :class="h === HOUR_START
+                ? 'translate-y-0'
+                : h === HOUR_END ? '-translate-y-3' : '-translate-y-1.5'"
               :style="{ top: `${(h - HOUR_START) * HOUR_PX}px` }"
             >
               {{ String(h).padStart(2, '0') }}:00

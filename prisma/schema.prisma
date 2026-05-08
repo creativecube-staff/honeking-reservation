@@ -31,6 +31,9 @@ model Store {
   businessHours BusinessHour[]
   holidays      Holiday[]
   reservations  Reservation[]
+  // ヘルプ勤務の back-relation: Shift.workStoreId が指す Shift 一覧。
+  // メイン所属（Practitioner.storeId）とは別。null の Shift はメイン店舗で勤務する想定。
+  workShifts    Shift[]        @relation("ShiftWorkStore")
 }
 
 // ベッド（店舗ごとに3〜4台）
@@ -132,20 +135,25 @@ model PublicHoliday {
 }
 
 // 施術者シフト（1施術者×1日=1行）
+// workStoreId が指定された日は、メイン店舗（Practitioner.storeId）ではなく workStore でヘルプ勤務する。
+// null の場合はメイン店舗で勤務（通常運用）。
 model Shift {
   id             Int      @id @default(autoincrement())
   practitionerId Int
   date           DateTime @db.Date
   startTime      String // "HH:MM"
   endTime        String // "HH:MM"
+  workStoreId    Int? // null ならメイン店舗で勤務、指定があればヘルプ先店舗
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   practitioner Practitioner @relation(fields: [practitionerId], references: [id], onDelete: Restrict)
+  workStore    Store?       @relation("ShiftWorkStore", fields: [workStoreId], references: [id], onDelete: Restrict)
 
   @@unique([practitionerId, date])
   @@index([practitionerId, date])
   @@index([date])
+  @@index([workStoreId, date])
 }
 
 // 予約ステータス

@@ -23,8 +23,17 @@ export default defineEventHandler(async (event) => {
     })
   }
 
+  const { availableFrom, availableUntil, ...rest } = parsed.data
+
   try {
-    return await prisma.menu.create({ data: { ...parsed.data, storeId } })
+    return await prisma.menu.create({
+      data: {
+        ...rest,
+        storeId,
+        availableFrom: availableFrom == null ? null : new Date(availableFrom),
+        availableUntil: availableUntil == null ? null : new Date(availableUntil),
+      },
+    })
   }
   catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {

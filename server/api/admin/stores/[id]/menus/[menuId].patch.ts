@@ -24,8 +24,17 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, statusMessage: 'メニューが見つかりません' })
   }
 
+  const { availableFrom, availableUntil, ...rest } = parsed.data
+  const data: Prisma.MenuUpdateInput = { ...rest }
+  if (availableFrom !== undefined) {
+    data.availableFrom = availableFrom == null ? null : new Date(availableFrom)
+  }
+  if (availableUntil !== undefined) {
+    data.availableUntil = availableUntil == null ? null : new Date(availableUntil)
+  }
+
   try {
-    return await prisma.menu.update({ where: { id: menuId }, data: parsed.data })
+    return await prisma.menu.update({ where: { id: menuId }, data })
   }
   catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {

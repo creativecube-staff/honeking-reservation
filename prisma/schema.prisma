@@ -76,15 +76,20 @@ model Practitioner {
 // storeId が非null = その店舗の特別メニュー（その店舗でのみ利用可能）
 // お客様側は storeId IS NULL OR storeId = <currentStoreId> で取得する
 model Menu {
-  id              Int      @id @default(autoincrement())
+  id              Int       @id @default(autoincrement())
   storeId         Int?
   name            String
   durationMinutes Int
   priceJpy        Int
-  displayOrder    Int      @default(0)
-  isActive        Boolean  @default(true)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  displayOrder    Int       @default(0)
+  isActive        Boolean   @default(true)
+  // 表示期間（任意・null = 制限なし）
+  // 予約対象日が [availableFrom, availableUntil] の範囲内のときのみお客様側に表示する
+  // 例: オープン記念キャンペーンメニュー
+  availableFrom   DateTime? @db.Date
+  availableUntil  DateTime? @db.Date
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   store        Store?        @relation(fields: [storeId], references: [id], onDelete: Restrict)
   reservations Reservation[]

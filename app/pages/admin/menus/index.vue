@@ -38,7 +38,24 @@ const dateFmt = new Intl.DateTimeFormat('ja-JP', {
   month: '2-digit',
   day: '2-digit',
 })
+const periodFmt = new Intl.DateTimeFormat('ja-JP', {
+  year: 'numeric',
+  month: 'numeric',
+  day: 'numeric',
+})
 const priceFmt = new Intl.NumberFormat('ja-JP')
+
+function toIsoDate(d: Date | string | null | undefined): string {
+  if (!d) return ''
+  return new Date(d).toISOString().slice(0, 10)
+}
+
+function formatPeriod(from: Date | string | null | undefined, until: Date | string | null | undefined): string | null {
+  if (!from && !until) return null
+  const f = from ? periodFmt.format(new Date(from)) : '常時'
+  const u = until ? periodFmt.format(new Date(until)) : '常時'
+  return `${f} 〜 ${u}`
+}
 
 // ── モーダル管理 ──────────────────────────────────────
 type EditorMode = 'create' | 'edit'
@@ -51,6 +68,8 @@ const state = reactive<MenuFormState>({
   priceJpy: 4000,
   displayOrder: 0,
   isActive: true,
+  availableFrom: '',
+  availableUntil: '',
 })
 const fieldErrors = ref<Record<string, string>>({})
 const formError = ref<string | null>(null)
@@ -62,6 +81,8 @@ function resetForm() {
   state.priceJpy = 4000
   state.displayOrder = 0
   state.isActive = true
+  state.availableFrom = ''
+  state.availableUntil = ''
   fieldErrors.value = {}
   formError.value = null
 }
@@ -82,6 +103,8 @@ function openEdit(menu: Menu) {
   state.priceJpy = menu.priceJpy
   state.displayOrder = menu.displayOrder
   state.isActive = menu.isActive
+  state.availableFrom = toIsoDate(menu.availableFrom)
+  state.availableUntil = toIsoDate(menu.availableUntil)
   fieldErrors.value = {}
   formError.value = null
   editorOpen.value = true
@@ -91,7 +114,14 @@ async function onSave() {
   fieldErrors.value = {}
   formError.value = null
 
-  const parsed = menuBaseSchema.safeParse(state)
+  // 空文字の availableFrom/availableUntil は null として送る
+  const payload = {
+    ...state,
+    availableFrom: state.availableFrom || null,
+    availableUntil: state.availableUntil || null,
+  }
+
+  const parsed = menuBaseSchema.safeParse(payload)
   if (!parsed.success) {
     const errors: Record<string, string> = {}
     for (const issue of parsed.error.issues) {
@@ -242,6 +272,12 @@ const errInput = 'border-red-600 focus:border-red-600 focus:shadow-[0_0_0_1px_#d
             <td class="px-3 py-2.5 align-top">
               <div class="font-semibold text-slate-900">
                 {{ m.name }}
+              </div>
+              <div
+                v-if="formatPeriod(m.availableFrom, m.availableUntil)"
+                class="inline-flex items-center gap-1 mt-1 text-[10px] text-purple-800 bg-purple-50 border border-purple-200 px-1.5 py-0.5 rounded-sm tabular-nums"
+              >
+                期間: {{ formatPeriod(m.availableFrom, m.availableUntil) }}
               </div>
               <div class="text-xs text-slate-600 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button
@@ -397,6 +433,45 @@ const errInput = 'border-red-600 focus:border-red-600 focus:shadow-[0_0_0_1px_#d
                   >
                   有効にする
                 </label>
+              </div>
+            </div>
+
+            <!-- 表示期間（任意） -->
+            <div class="border-t border-[#dcdcde] pt-3">
+              <label class="block text-sm font-semibold text-slate-900 mb-1">
+                表示期間（任意）
+              </label>
+              <p class="text-xs text-slate-600 mb-2">
+                予約対象日が下記期間内のときのみお客様側に表示します。両方空 = 常時表示。<br>
+                例: 期間限定キャンペーンメニュー
+              </p>
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-xs font-semibold text-slate-700 mb-1">
+                    開始日
+                  </label>
+                  <input
+                    v-model="state.availableFrom"
+                    type="date"
+                    :class="[baseInput, fieldErrors.availableFrom && errInput]"
+                  >
+                  <p v-if="fieldErrors.availableFrom" class="mt-1 text-xs text-red-700">
+                    {{ fieldErrors.availableFrom }}
+                  </p>
+                </div>
+                <div>
+                  <label class="block text-xs font-semibold text-slate-700 mb-1">
+                    終了日
+                  </label>
+                  <input
+                    v-model="state.availableUntil"
+                    type="date"
+                    :class="[baseInput, fieldErrors.availableUntil && errInput]"
+                  >
+                  <p v-if="fieldErrors.availableUntil" class="mt-1 text-xs text-red-700">
+                    {{ fieldErrors.availableUntil }}
+                  </p>
+                </div>
               </div>
             </div>
 

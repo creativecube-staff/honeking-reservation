@@ -30,6 +30,7 @@ model Store {
   menus         Menu[]
   businessHours BusinessHour[]
   holidays      Holiday[]
+  closures      Closure[]
   reservations  Reservation[]
   // ヘルプ勤務の back-relation: Shift.workStoreId が指す Shift 一覧。
   // メイン所属（Practitioner.storeId）とは別。null の Shift はメイン店舗で勤務する想定。
@@ -125,6 +126,25 @@ model Holiday {
   store Store @relation(fields: [storeId], references: [id], onDelete: Restrict)
 
   @@unique([storeId, date])
+  @@index([storeId, date])
+}
+
+// 部分閉店（イレギュラーで一定時間だけ休み・同日複数行可）
+// 終日休みは Holiday テーブルで表現する（こちらは時間レンジ必須）
+// 例: 2026-06-15 14:00-16:00 設備点検で閉店
+model Closure {
+  id        Int      @id @default(autoincrement())
+  storeId   Int
+  date      DateTime @db.Date
+  startTime String // "HH:MM"
+  endTime   String // "HH:MM"
+  note      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Restrict)
+
+  @@unique([storeId, date, startTime])
   @@index([storeId, date])
 }
 

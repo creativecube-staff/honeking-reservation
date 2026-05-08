@@ -49,6 +49,21 @@ const dateLabel = computed(() => {
 })
 
 // ── データ取得 ─────────────────────────────────────────
+type ScheduleByDate = {
+  store: { id: number, name: string, slug: string }
+  date: string
+  dayOfWeek: number
+  isHoliday: boolean
+  holidayNote: string | null
+  isPublicHoliday: boolean
+  publicHolidayName: string | null
+  isClosed: boolean
+  openTime: string | null
+  closeTime: string | null
+  breakStartTime: string | null
+  breakEndTime: string | null
+}
+
 const { data: stores } = await useFetch<Store[]>('/api/admin/stores', {
   query: { status: 'active' },
 })
@@ -59,12 +74,28 @@ const { data: shifts, refresh: refreshShifts } = await useFetch<ShiftWithJoins[]
   query: { date },
   watch: [date],
 })
+const { data: schedule } = await useFetch<ScheduleByDate[]>('/api/admin/schedule/by-date', {
+  query: { date },
+  watch: [date],
+})
 
 // 既存シフトを practitionerId をキーに引けるようにする
 const shiftByPractitioner = computed(() => {
   const map = new Map<number, ShiftWithJoins>()
   for (const s of shifts.value ?? []) map.set(s.practitionerId, s)
   return map
+})
+
+// 店舗 ID → その日の営業状況
+const scheduleByStore = computed(() => {
+  const map = new Map<number, ScheduleByDate>()
+  for (const s of schedule.value ?? []) map.set(s.store.id, s)
+  return map
+})
+
+// 祝日表示用（schedule のどれか 1 件でも publicHolidayName を持っていれば全店共通の祝日）
+const publicHolidayName = computed(() => {
+  return (schedule.value ?? []).find(s => s.isPublicHoliday)?.publicHolidayName ?? null
 })
 
 // ── 行の編集ステート ────────────────────────────────────
@@ -79,9 +110,11 @@ watchEffect(() => {
   const list = staffList.value ?? []
   for (const s of list) {
     const existing = shiftByPractitioner.value.get(s.id)
+    // 既存シフトがあればその値、無ければメイン店舗のその日の営業時間をデフォルトに
+    const sched = scheduleByStore.value.get(s.storeId)
     rowStates[s.id] = {
-      startTime: existing?.startTime ?? '09:30',
-      endTime: existing?.endTime ?? '20:30',
+      startTime: existing?.startTime ?? sched?.openTime ?? '09:30',
+      endTime: existing?.endTime ?? sched?.closeTime ?? '20:30',
       workStoreId: existing?.workStoreId ?? null,
     }
   }
@@ -186,6 +219,37 @@ const baseInput = 'w-full px-2 py-1 text-sm border border-[#8c8f94] rounded-sm b
       </button>
     </div>
 
+    <!-- その日の各店舗の営業状況（出勤・退勤の初期値はこの営業時間が使われる） -->
+    <div v-if="(schedule ?? []).length > 0" class="bg-white border border-[#c3c4c7] rounded-sm p-3 mb-4">
+      <h3 class="text-xs font-semibold text-slate-900 mb-2 flex items-center gap-2">
+        <UIcon name="i-lucide-clock" class="size-4" />
+        この日の営業状況
+        <span v-if="publicHolidayName" class="text-orange-700">
+          祝日: {{ publicHolidayName }}（日曜扱い）
+        </span>
+      </h3>
+      <div class="flex flex-wrap gap-x-6 gap-y-1 text-sm">
+        <div v-for="s in schedule" :key="s.store.id" class="flex items-center gap-2">
+          <span class="font-medium text-slate-900">{{ s.store.name }}:</span>
+          <span v-if="s.isHoliday" class="text-red-700 font-medium">
+            🚫 店休日<span v-if="s.holidayNote" class="text-xs text-slate-500"> ({{ s.holidayNote }})</span>
+          </span>
+          <span v-else-if="s.isClosed" class="text-slate-500">
+            定休
+          </span>
+          <span v-else-if="s.openTime && s.closeTime" class="text-slate-700">
+            {{ s.openTime }}–{{ s.closeTime }}
+            <span v-if="s.breakStartTime && s.breakEndTime" class="text-xs text-slate-500">
+              （休憩 {{ s.breakStartTime }}–{{ s.breakEndTime }}）
+            </span>
+          </span>
+          <span v-else class="text-slate-500 text-xs">
+            営業時間未設定
+          </span>
+        </div>
+      </div>
+    </div>
+
     <div v-if="(staffList ?? []).length === 0" class="bg-white border border-[#c3c4c7] rounded-sm p-6 text-center text-slate-600">
       まだスタッフが登録されていません。
       <NuxtLink to="/admin/staff/new" class="text-blue-700 hover:text-blue-900 hover:underline">
@@ -195,8 +259,14 @@ const baseInput = 'w-full px-2 py-1 text-sm border border-[#8c8f94] rounded-sm b
 
     <!-- メイン店舗ごとにグルーピング -->
     <div v-for="g in grouped" :key="g.store.id" class="mb-6">
-      <h2 class="text-base font-semibold text-slate-900 mb-2">
+      <h2 class="text-base font-semibold text-slate-900 mb-2 flex items-center gap-2 flex-wrap">
         {{ g.store.name }}
+        <span
+          v-if="scheduleByStore.get(g.store.id)?.isHoliday"
+          class="text-xs font-normal text-red-700 bg-red-50 border border-red-200 px-2 py-0.5 rounded-sm"
+        >
+          🚫 店休日のため通常は出勤不要
+        </span>
       </h2>
       <div class="bg-white border border-[#c3c4c7] rounded-sm shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-x-auto">
         <table class="w-full text-sm">

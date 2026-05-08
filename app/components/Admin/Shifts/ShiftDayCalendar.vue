@@ -31,14 +31,14 @@ const { data: staffList } = await useFetch<StaffWithStore[]>('/api/admin/staff',
 const { data: shifts, refresh: refreshShifts } = await useFetch<ShiftWithJoins[]>(
   '/api/admin/shifts',
   {
-    query: { date: () => props.date },
+    query: computed(() => ({ date: props.date })),
     watch: [() => props.date],
   },
 )
 const { data: schedule } = await useFetch<ScheduleByDate[]>(
   '/api/admin/schedule/by-date',
   {
-    query: { date: () => props.date },
+    query: computed(() => ({ date: props.date })),
     watch: [() => props.date],
   },
 )

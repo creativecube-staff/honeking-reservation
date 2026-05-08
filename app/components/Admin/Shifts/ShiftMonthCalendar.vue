@@ -15,7 +15,7 @@ const route = useRoute()
 
 // その月のシフト全件を取得
 const { data: shifts } = await useFetch<ShiftWithJoins[]>('/api/admin/shifts', {
-  query: { month: () => props.month },
+  query: computed(() => ({ month: props.month })),
   watch: [() => props.month],
 })
 

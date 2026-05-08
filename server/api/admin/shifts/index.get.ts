@@ -1,12 +1,30 @@
 import { prisma } from '../../../utils/prisma'
 
-// 指定日のシフト一覧。?date=YYYY-MM-DD 必須。
-// 任意で ?storeId フィルタ（メイン店舗 or workStore のどちらかが一致するシフト）
+// シフト一覧。
+// - ?date=YYYY-MM-DD: 単日（既存挙動）
+// - ?month=YYYY-MM: 月単位（その月の 1 日 〜 末日のシフトをまとめて返す）
+// - ?storeId: メイン店舗または workStore が一致するシフトに絞り込み（任意）
 export default defineEventHandler(async (event) => {
   const query = getQuery(event)
   const date = typeof query.date === 'string' ? query.date : ''
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    throw createError({ statusCode: 400, statusMessage: 'date は YYYY-MM-DD 形式で指定してください' })
+  const month = typeof query.month === 'string' ? query.month : ''
+
+  let dateFilter: { date: Date } | { date: { gte: Date, lt: Date } }
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    dateFilter = { date: new Date(date) }
+  }
+  else if (/^\d{4}-\d{2}$/.test(month)) {
+    const [y, m] = month.split('-').map(Number)
+    const start = new Date(y!, m! - 1, 1)
+    const end = new Date(y!, m!, 1) // 翌月 1 日
+    dateFilter = { date: { gte: start, lt: end } }
+  }
+  else {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'date (YYYY-MM-DD) または month (YYYY-MM) を指定してください',
+    })
   }
 
   const storeIdRaw = typeof query.storeId === 'string' ? Number(query.storeId) : null
@@ -14,17 +32,18 @@ export default defineEventHandler(async (event) => {
 
   const where = storeId
     ? {
-        date: new Date(date),
+        ...dateFilter,
         OR: [
           { workStoreId: storeId },
           { workStoreId: null, practitioner: { storeId } },
         ],
       }
-    : { date: new Date(date) }
+    : dateFilter
 
   return prisma.shift.findMany({
     where,
     orderBy: [
+      { date: 'asc' },
       { practitioner: { storeId: 'asc' } },
       { practitioner: { displayOrder: 'asc' } },
     ],

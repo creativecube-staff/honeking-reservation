@@ -3,15 +3,17 @@
 // 上部 admin bar（黒紺帯、高さ 32px）+ 左サイドバー（黒紺、幅 180px）+ メイン（白背景）。
 const { user, fetch: fetchSession, clear: clearSession } = useUserSession()
 
-// ナビ定義。フラット展開（店舗管理の下に各エンティティを並列）
+// ナビ定義。
+// - 店舗管理: 基本情報・ベッド・メニュー（店舗ごとの固定情報）をタブで集約
+// - スタッフ管理: 全店舗のスタッフを横断管理（メイン店舗で絞り込み）
+// - シフト管理: 日付別、出勤時刻 + workStoreId（人手不足時のヘルプ先指定）
+// - スケジュール管理: 営業時間・店休日（店舗選択 → タブ）
 const navItems = [
   { icon: 'i-lucide-home', label: 'ダッシュボード', to: '/admin' },
   { icon: 'i-lucide-building-2', label: '店舗管理', to: '/admin/stores' },
-  { icon: 'i-lucide-bed-double', label: 'ベッド管理', to: '/admin/beds' },
-  { icon: 'i-lucide-user-round', label: '施術者管理', to: '/admin/practitioners' },
-  { icon: 'i-lucide-clipboard-list', label: 'メニュー管理', to: '/admin/menus' },
-  { icon: 'i-lucide-clock', label: '営業時間', to: '/admin/business-hours' },
-  { icon: 'i-lucide-calendar-x', label: '店休日', to: '/admin/holidays' },
+  { icon: 'i-lucide-user-round', label: 'スタッフ管理', to: '/admin/staff' },
+  { icon: 'i-lucide-calendar-clock', label: 'シフト管理', to: '/admin/shifts' },
+  { icon: 'i-lucide-calendar-cog', label: 'スケジュール管理', to: '/admin/schedule' },
 ] as const
 
 const route = useRoute()

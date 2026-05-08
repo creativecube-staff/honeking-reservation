@@ -5,6 +5,7 @@ import { storeBaseSchema, type StoreFormState } from '~~/shared/schemas/store'
 definePageMeta({ layout: 'admin' })
 
 const route = useRoute()
+const router = useRouter()
 const id = Number(route.params.id)
 if (!Number.isInteger(id) || id <= 0) {
   throw createError({ statusCode: 400, statusMessage: '不正な ID です' })
@@ -15,6 +16,22 @@ if (loadError.value) {
   throw createError({ statusCode: 404, statusMessage: '店舗が見つかりません' })
 }
 
+// ── タブ管理 ────────────────────────────────────────────
+type TabId = 'basic' | 'beds' | 'menus'
+const tabs: { id: TabId, label: string }[] = [
+  { id: 'basic', label: '基本情報' },
+  { id: 'beds', label: 'ベッド' },
+  { id: 'menus', label: 'メニュー' },
+]
+const activeTab = computed<TabId>(() => {
+  const t = String(route.query.tab ?? 'basic')
+  return tabs.find(x => x.id === t)?.id ?? 'basic'
+})
+function setTab(id: TabId) {
+  router.replace({ query: { ...route.query, tab: id } })
+}
+
+// ── 基本情報フォームの state ──────────────────────────────
 const state = reactive<StoreFormState>({
   slug: store.value!.slug,
   prefecture: store.value!.prefecture,
@@ -87,14 +104,36 @@ async function onDelete() {
   <div>
     <div class="flex items-center gap-3 mb-1">
       <h1 class="text-2xl font-semibold text-slate-900">
-        店舗を編集
+        {{ store?.name }}
       </h1>
+      <span
+        v-if="store && !store.isActive"
+        class="inline-flex items-center text-xs text-slate-700 bg-slate-100 border border-slate-300 px-2 py-0.5 rounded-sm"
+      >
+        無効
+      </span>
     </div>
     <p class="text-sm text-slate-600 mb-4">
       <NuxtLink to="/admin/stores" class="text-blue-700 hover:text-blue-900 hover:underline">
         ← 店舗一覧に戻る
       </NuxtLink>
     </p>
+
+    <!-- WP 風水平タブ -->
+    <div class="border-b border-[#c3c4c7] mb-5 flex">
+      <button
+        v-for="t in tabs"
+        :key="t.id"
+        type="button"
+        class="px-4 py-2 text-sm -mb-px border border-transparent transition-colors"
+        :class="activeTab === t.id
+          ? 'border-[#c3c4c7] border-b-white bg-white text-slate-900 font-semibold rounded-t-sm'
+          : 'text-blue-700 hover:text-blue-900 hover:bg-[#f6f7f7]'"
+        @click="setTab(t.id)"
+      >
+        {{ t.label }}
+      </button>
+    </div>
 
     <UAlert
       v-if="formError"
@@ -104,7 +143,8 @@ async function onDelete() {
       class="mb-4"
     />
 
-    <form class="space-y-4" @submit.prevent="onSubmit">
+    <!-- 基本情報タブ -->
+    <form v-show="activeTab === 'basic'" class="space-y-4" @submit.prevent="onSubmit">
       <AdminStoreFormFields
         :state="state"
         :field-errors="fieldErrors"
@@ -138,5 +178,33 @@ async function onDelete() {
         </button>
       </div>
     </form>
+
+    <!-- ベッドタブ（Step E-2 で実装） -->
+    <div
+      v-show="activeTab === 'beds'"
+      class="bg-white border border-[#c3c4c7] rounded-sm p-6 text-center text-slate-600"
+    >
+      <UIcon name="i-lucide-bed-double" class="size-8 mx-auto mb-3 text-slate-400" />
+      <p class="text-sm">
+        ベッド管理 UI は <strong>Step E-2</strong> で実装予定です。
+      </p>
+      <p class="text-xs text-slate-500 mt-2">
+        ベッドの追加・名前変更・削除がこのタブからできるようになります。
+      </p>
+    </div>
+
+    <!-- メニュータブ（Step E-3 で実装） -->
+    <div
+      v-show="activeTab === 'menus'"
+      class="bg-white border border-[#c3c4c7] rounded-sm p-6 text-center text-slate-600"
+    >
+      <UIcon name="i-lucide-clipboard-list" class="size-8 mx-auto mb-3 text-slate-400" />
+      <p class="text-sm">
+        メニュー管理 UI は <strong>Step E-3</strong> で実装予定です。
+      </p>
+      <p class="text-xs text-slate-500 mt-2">
+        メニューの追加・編集（所要時間・価格）・削除がこのタブからできるようになります。
+      </p>
+    </div>
   </div>
 </template>

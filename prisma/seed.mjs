@@ -28,8 +28,9 @@ const STORES = [
   },
 ];
 
-// メニュー（両店共通の初期テンプレ。後で管理画面から店舗ごとに編集される想定）
-const MENUS = [
+// 共通メニュー（storeId IS NULL で投入。全店舗で自動利用可能）
+// 店舗特別メニューは管理画面から店舗ごとに追加する。初期は空。
+const COMMON_MENUS = [
   { name: '全身整体 30 分', durationMinutes: 30, priceJpy: 4000, displayOrder: 1 },
   { name: '全身整体 60 分', durationMinutes: 60, priceJpy: 7000, displayOrder: 2 },
   { name: '部分整体（肩・腰） 30 分', durationMinutes: 30, priceJpy: 3500, displayOrder: 3 },
@@ -116,7 +117,7 @@ async function main() {
   await prisma.bed.deleteMany();
   await prisma.store.deleteMany();
 
-  console.log('🏥 店舗・ベッド・施術者・メニュー・営業時間・店休日を投入...');
+  console.log('🏥 店舗・ベッド・施術者・営業時間・店休日を投入...');
   for (const s of STORES) {
     const store = await prisma.store.create({
       data: {
@@ -142,10 +143,6 @@ async function main() {
       });
     }
 
-    for (const m of MENUS) {
-      await prisma.menu.create({ data: { storeId: store.id, ...m } });
-    }
-
     for (const bh of BUSINESS_HOURS) {
       await prisma.businessHour.create({ data: { storeId: store.id, ...bh } });
     }
@@ -155,6 +152,11 @@ async function main() {
         data: { storeId: store.id, date: new Date(h.date), note: h.note },
       });
     }
+  }
+
+  console.log('📋 共通メニュー（全店舗で利用可能）を投入...');
+  for (const m of COMMON_MENUS) {
+    await prisma.menu.create({ data: { ...m, storeId: null } });
   }
 
   console.log('🎌 国民の祝日(2026-2027)を投入...');

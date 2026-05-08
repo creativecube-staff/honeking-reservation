@@ -70,10 +70,13 @@ model Practitioner {
   @@index([storeId])
 }
 
-// メニュー（店舗ごと個別）
+// メニュー
+// storeId が null = 共通メニュー（全店舗で自動利用可能）
+// storeId が非null = その店舗の特別メニュー（その店舗でのみ利用可能）
+// お客様側は storeId IS NULL OR storeId = <currentStoreId> で取得する
 model Menu {
   id              Int      @id @default(autoincrement())
-  storeId         Int
+  storeId         Int?
   name            String
   durationMinutes Int
   priceJpy        Int
@@ -82,9 +85,11 @@ model Menu {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  store        Store         @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  store        Store?        @relation(fields: [storeId], references: [id], onDelete: Restrict)
   reservations Reservation[]
 
+  // (storeId, name) は店舗特別メニューの一意性を保証する。
+  // 共通メニュー（storeId IS NULL）の name 重複防止は migration の部分 unique index で対応。
   @@unique([storeId, name])
   @@index([storeId])
 }

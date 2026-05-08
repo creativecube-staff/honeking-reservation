@@ -2,13 +2,14 @@
 import type { Menu } from '@prisma/client'
 import { menuBaseSchema, type MenuFormState } from '~~/shared/schemas/menu'
 
-const props = defineProps<{
-  storeId: number
-}>()
+definePageMeta({ layout: 'admin' })
 
-const { data: menus, refresh, error } = await useFetch<Menu[]>(`/api/admin/stores/${props.storeId}/menus`, {
-  watch: false,
+const { data: menus, refresh, error } = await useFetch<Menu[]>('/api/admin/menus', {
+  query: { status: 'all' },
 })
+
+type Status = 'all' | 'active' | 'inactive'
+const status = ref<Status>('all')
 
 const counts = computed(() => {
   const list = menus.value ?? []
@@ -19,6 +20,19 @@ const counts = computed(() => {
   }
 })
 
+const filtered = computed(() => {
+  const list = menus.value ?? []
+  if (status.value === 'active') return list.filter(m => m.isActive)
+  if (status.value === 'inactive') return list.filter(m => !m.isActive)
+  return list
+})
+
+const tabs: { v: Status, label: string }[] = [
+  { v: 'all', label: 'すべて' },
+  { v: 'active', label: '有効' },
+  { v: 'inactive', label: '無効' },
+]
+
 const dateFmt = new Intl.DateTimeFormat('ja-JP', {
   year: 'numeric',
   month: '2-digit',
@@ -26,7 +40,7 @@ const dateFmt = new Intl.DateTimeFormat('ja-JP', {
 })
 const priceFmt = new Intl.NumberFormat('ja-JP')
 
-// ── モーダル管理 ───────────────────────────────────────
+// ── モーダル管理 ──────────────────────────────────────
 type EditorMode = 'create' | 'edit'
 const editorOpen = ref(false)
 const editorMode = ref<EditorMode>('create')
@@ -56,7 +70,6 @@ function openCreate() {
   editorMode.value = 'create'
   editingId.value = null
   resetForm()
-  // 新規時の displayOrder は既存最大 + 1
   state.displayOrder = (menus.value ?? []).reduce((acc, m) => Math.max(acc, m.displayOrder), -1) + 1
   editorOpen.value = true
 }
@@ -93,13 +106,10 @@ async function onSave() {
   submitting.value = true
   try {
     if (editorMode.value === 'create') {
-      await $fetch(`/api/admin/stores/${props.storeId}/menus`, {
-        method: 'POST',
-        body: parsed.data,
-      })
+      await $fetch('/api/admin/menus', { method: 'POST', body: parsed.data })
     }
     else if (editingId.value !== null) {
-      await $fetch(`/api/admin/stores/${props.storeId}/menus/${editingId.value}`, {
+      await $fetch(`/api/admin/menus/${editingId.value}`, {
         method: 'PATCH',
         body: parsed.data,
       })
@@ -116,14 +126,13 @@ async function onSave() {
   }
 }
 
-// ── 行アクション ────────────────────────────────────────
 const busy = ref<number | null>(null)
 
 async function onDeactivate(menu: Menu) {
-  if (!confirm(`メニュー「${menu.name}」を無効化しますか？`)) return
+  if (!confirm(`共通メニュー「${menu.name}」を無効化しますか？`)) return
   busy.value = menu.id
   try {
-    await $fetch(`/api/admin/stores/${props.storeId}/menus/${menu.id}`, { method: 'DELETE' })
+    await $fetch(`/api/admin/menus/${menu.id}`, { method: 'DELETE' })
     await refresh()
   }
   finally {
@@ -134,7 +143,7 @@ async function onDeactivate(menu: Menu) {
 async function onActivate(menu: Menu) {
   busy.value = menu.id
   try {
-    await $fetch(`/api/admin/stores/${props.storeId}/menus/${menu.id}`, {
+    await $fetch(`/api/admin/menus/${menu.id}`, {
       method: 'PATCH',
       body: { isActive: true },
     })
@@ -150,43 +159,51 @@ const errInput = 'border-red-600 focus:border-red-600 focus:shadow-[0_0_0_1px_#d
 </script>
 
 <template>
-  <div class="space-y-4">
-    <!-- 説明 -->
-    <div class="bg-blue-50 border border-blue-200 rounded-sm p-3 text-sm text-slate-700">
-      <p>このタブでは <strong>この店舗だけの特別メニュー</strong> を管理します。</p>
-      <p class="text-xs text-slate-600 mt-1">
-        全店舗で利用できる共通メニューは
-        <NuxtLink to="/admin/menus" class="text-blue-700 hover:text-blue-900 hover:underline">
-          メニュー管理
-        </NuxtLink>
-        から登録してください。
-      </p>
-    </div>
-
-    <!-- ヘッダー -->
-    <div class="flex items-center justify-between">
-      <div class="text-sm text-slate-700">
-        特別メニュー 合計: <strong>{{ counts.all }}</strong> 件 ／
-        有効: <strong>{{ counts.active }}</strong> 件 ／
-        無効: <strong>{{ counts.inactive }}</strong> 件
-      </div>
+  <div>
+    <div class="flex items-center gap-3 mb-1">
+      <h1 class="text-2xl font-semibold text-slate-900">
+        メニュー管理
+      </h1>
       <button
         type="button"
-        class="inline-flex items-center px-3 py-1.5 bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold rounded-sm shadow-sm"
+        class="inline-flex items-center px-3 py-1 border border-[#8c8f94] bg-[#f6f7f7] hover:bg-white text-slate-700 hover:text-slate-900 text-sm rounded-sm"
         @click="openCreate"
       >
-        + 特別メニューを追加
+        新規追加
       </button>
     </div>
+    <p class="text-sm text-slate-600 mb-4">
+      共通メニュー（全店舗で自動的に利用可能）を管理します。<br>
+      店舗ごとの特別メニューは <strong>店舗管理 → 各店舗 → メニュータブ</strong> から登録してください。
+    </p>
+
+    <!-- WP 風ステータスフィルタ -->
+    <ul class="text-sm mb-3 flex items-center">
+      <li v-for="(tab, i) in tabs" :key="tab.v" class="flex items-center">
+        <button
+          class="hover:underline"
+          :class="status === tab.v
+            ? 'text-slate-900 font-semibold'
+            : 'text-blue-700 hover:text-blue-900'"
+          @click="status = tab.v"
+        >
+          {{ tab.label }}
+          <span :class="status === tab.v ? 'text-slate-500' : 'text-slate-400'">
+            ({{ counts[tab.v] }})
+          </span>
+        </button>
+        <span v-if="i < tabs.length - 1" class="text-slate-300 mx-2">|</span>
+      </li>
+    </ul>
 
     <UAlert
       v-if="error"
       color="error"
       icon="i-lucide-triangle-alert"
-      :title="`メニュー一覧の取得に失敗しました: ${error.message}`"
+      :title="`一覧の取得に失敗しました: ${error.message}`"
+      class="mb-3"
     />
 
-    <!-- WP 風テーブル -->
     <div class="bg-white border border-[#c3c4c7] rounded-sm shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-x-auto">
       <table class="w-full text-sm">
         <thead class="bg-[#f6f7f7] text-slate-900">
@@ -212,13 +229,13 @@ const errInput = 'border-red-600 focus:border-red-600 focus:shadow-[0_0_0_1px_#d
           </tr>
         </thead>
         <tbody>
-          <tr v-if="(menus ?? []).length === 0">
+          <tr v-if="filtered.length === 0">
             <td colspan="6" class="px-3 py-6 text-center text-slate-500">
-              まだメニューが登録されていません。右上の「+ メニューを追加」から追加してください。
+              該当する共通メニューはありません。「新規追加」から登録してください。
             </td>
           </tr>
           <tr
-            v-for="m in menus"
+            v-for="m in filtered"
             :key="m.id"
             class="group border-b border-[#f0f0f1] last:border-b-0 hover:bg-[#f6f7f7]"
           >
@@ -292,7 +309,7 @@ const errInput = 'border-red-600 focus:border-red-600 focus:shadow-[0_0_0_1px_#d
       <template #content>
         <div class="bg-white p-5">
           <h2 class="text-lg font-semibold text-slate-900 mb-4">
-            {{ editorMode === 'create' ? 'メニューを追加' : 'メニューを編集' }}
+            {{ editorMode === 'create' ? '共通メニューを追加' : '共通メニューを編集' }}
           </h2>
 
           <UAlert

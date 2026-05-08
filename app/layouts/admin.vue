@@ -4,14 +4,16 @@
 const { user, fetch: fetchSession, clear: clearSession } = useUserSession()
 
 // ナビ定義。
-// - 店舗管理: 基本情報・ベッド・メニュー（店舗ごとの固定情報）をタブで集約
+// - 店舗管理: 基本情報・ベッド・特別メニューをタブで集約
 // - スタッフ管理: 全店舗のスタッフを横断管理（メイン店舗で絞り込み）
+// - メニュー管理: 共通メニュー（全店舗で利用可能）の管理。店舗ごとの特別メニューは店舗詳細から
 // - シフト管理: 日付別、出勤時刻 + workStoreId（人手不足時のヘルプ先指定）
 // - スケジュール管理: 営業時間・店休日（店舗選択 → タブ）
 const navItems = [
   { icon: 'i-lucide-home', label: 'ダッシュボード', to: '/admin' },
   { icon: 'i-lucide-building-2', label: '店舗管理', to: '/admin/stores' },
   { icon: 'i-lucide-user-round', label: 'スタッフ管理', to: '/admin/staff' },
+  { icon: 'i-lucide-clipboard-list', label: 'メニュー管理', to: '/admin/menus' },
   { icon: 'i-lucide-calendar-clock', label: 'シフト管理', to: '/admin/shifts' },
   { icon: 'i-lucide-calendar-cog', label: 'スケジュール管理', to: '/admin/schedule' },
 ] as const

@@ -417,7 +417,9 @@ const HANDLE_PX = 8 // 上下端のリサイズハンドル領域
               v-for="r in rangesOfColumn(col.id)"
               :key="r.id"
               class="absolute left-0.5 right-0.5 rounded-sm overflow-visible shadow-sm"
-              :class="['bg-orange-100 border border-orange-400']"
+              :class="r.isGhost
+                ? 'bg-slate-100/70 border border-dashed border-slate-400 hover:bg-slate-200/70'
+                : 'bg-orange-100 border border-orange-400'"
               :style="{
                 top: `${minutesToTop(toMinutes(r.startTime))}px`,
                 height: `${minutesToTop(toMinutes(r.endTime)) - minutesToTop(toMinutes(r.startTime))}px`,
@@ -429,20 +431,22 @@ const HANDLE_PX = 8 // 上下端のリサイズハンドル領域
               <!-- 上端リサイズハンドル -->
               <div
                 v-if="allowEdit"
-                class="absolute top-0 left-0 right-0 cursor-ns-resize bg-orange-300/40 hover:bg-orange-400/60"
+                class="absolute top-0 left-0 right-0 cursor-ns-resize"
+                :class="r.isGhost ? 'bg-slate-300/40 hover:bg-slate-400/60' : 'bg-orange-300/40 hover:bg-orange-400/60'"
                 :style="{ height: `${HANDLE_PX}px` }"
                 @pointerdown="(e) => onBarPointerDown(e, r, 'resize-top')"
               />
               <!-- 下端リサイズハンドル -->
               <div
                 v-if="allowEdit"
-                class="absolute bottom-0 left-0 right-0 cursor-ns-resize bg-orange-300/40 hover:bg-orange-400/60"
+                class="absolute bottom-0 left-0 right-0 cursor-ns-resize"
+                :class="r.isGhost ? 'bg-slate-300/40 hover:bg-slate-400/60' : 'bg-orange-300/40 hover:bg-orange-400/60'"
                 :style="{ height: `${HANDLE_PX}px` }"
                 @pointerdown="(e) => onBarPointerDown(e, r, 'resize-bottom')"
               />
-              <!-- 削除ボタン -->
+              <!-- 削除ボタン（ゴーストには出さない） -->
               <button
-                v-if="allowEdit"
+                v-if="allowEdit && !r.isGhost"
                 type="button"
                 class="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-white border border-orange-400 text-orange-700 hover:bg-orange-500 hover:text-white text-[10px] font-bold leading-none flex items-center justify-center shadow-sm z-10"
                 title="このレンジを削除"

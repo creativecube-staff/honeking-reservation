@@ -13,4 +13,6 @@ export interface CalendarRange {
   columnId: string | number
   startTime: string // "HH:MM"
   endTime: string // "HH:MM"
+  /** true なら「仮表示」用の薄いゴーストバー。シフト未設定をデフォルト時間で見せる時などに使う */
+  isGhost?: boolean
 }

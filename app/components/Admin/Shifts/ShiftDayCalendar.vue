@@ -13,6 +13,15 @@ const props = defineProps<{
 }>()
 
 // ── データ取得 ─────────────────────────────────────────
+type ScheduleByDate = {
+  store: { id: number, name: string }
+  isHoliday: boolean
+  isClosed: boolean
+  openTime: string | null
+  closeTime: string | null
+  ranges: { startTime: string, endTime: string }[]
+}
+
 const { data: stores } = await useFetch<Store[]>('/api/admin/stores', {
   query: { status: 'active' },
 })
@@ -21,6 +30,13 @@ const { data: staffList } = await useFetch<StaffWithStore[]>('/api/admin/staff',
 })
 const { data: shifts, refresh: refreshShifts } = await useFetch<ShiftWithJoins[]>(
   '/api/admin/shifts',
+  {
+    query: { date: () => props.date },
+    watch: [() => props.date],
+  },
+)
+const { data: schedule } = await useFetch<ScheduleByDate[]>(
+  '/api/admin/schedule/by-date',
   {
     query: { date: () => props.date },
     watch: [() => props.date],
@@ -48,7 +64,7 @@ const shiftMeta = reactive<Map<number, { id: number, workStoreId: number | null 
 
 watchEffect(() => {
   const list = shifts.value ?? []
-  ranges.value = list.map(s => ({
+  const result: CalendarRange[] = list.map(s => ({
     id: `shift-${s.id}`,
     columnId: s.practitionerId,
     startTime: s.startTime,
@@ -58,6 +74,28 @@ watchEffect(() => {
   for (const s of list) {
     shiftMeta.set(s.practitionerId, { id: s.id, workStoreId: s.workStoreId })
   }
+
+  // シフトが未設定のスタッフはメイン店舗の営業時間でゴースト表示
+  // （メイン店舗が定休 / 店休日 の場合は出勤予定なしとして何も出さない）
+  const shiftedIds = new Set(list.map(s => s.practitionerId))
+  const scheduleMap = new Map<number, ScheduleByDate>(
+    (schedule.value ?? []).map(sc => [sc.store.id, sc]),
+  )
+  for (const staff of staffList.value ?? []) {
+    if (shiftedIds.has(staff.id)) continue
+    const sched = scheduleMap.get(staff.storeId)
+    if (!sched || sched.isHoliday || sched.isClosed) continue
+    if (!sched.openTime || !sched.closeTime) continue
+    result.push({
+      id: `ghost-${staff.id}`,
+      columnId: staff.id,
+      startTime: sched.openTime,
+      endTime: sched.closeTime,
+      isGhost: true,
+    } as CalendarRange)
+  }
+
+  ranges.value = result
 })
 
 function getShiftMeta(practitionerId: number) {
@@ -338,11 +376,11 @@ function headerNoteFor(practitionerId: number): string | null {
                 メイン店舗で勤務
               </span>
               <span class="block text-xs text-slate-600 mt-0.5">
-                ({{ (stores ?? []).find(s => s.id === helpPopover!.mainStoreId)?.name }})
+                ({{ (stores ?? []).find(s => s.id === helpPopover?.mainStoreId)?.name }})
               </span>
             </button>
             <button
-              v-for="store in (stores ?? []).filter(s => s.id !== helpPopover!.mainStoreId)"
+              v-for="store in (stores ?? []).filter(s => s.id !== helpPopover?.mainStoreId)"
               :key="store.id"
               type="button"
               class="w-full text-left px-3 py-2 border rounded-sm hover:bg-[#f6f7f7]"

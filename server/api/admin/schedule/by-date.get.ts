@@ -7,6 +7,10 @@ import { prisma } from '../../../utils/prisma'
 //   1. Holiday に該当する日 → 店休 (営業しない)
 //   2. PublicHoliday に該当する日 → BusinessHour[dayOfWeek=0] (日曜扱い) を引く
 //   3. それ以外 → BusinessHour[dayOfWeek=date.getDay()] を引く
+//
+// BusinessHour は 1 日に複数レンジを持てるので ranges として返す。
+// 互換のため openTime/closeTime は最早/最遅で導出、breakStartTime/breakEndTime は
+// 「最初の中抜け」を表す（中抜けが複数ある場合は最初の 1 つだけ）。
 export default defineEventHandler(async (event) => {
   const query = getQuery(event)
   const date = typeof query.date === 'string' ? query.date : ''
@@ -35,7 +39,17 @@ export default defineEventHandler(async (event) => {
 
   return stores.map((s) => {
     const holiday = holidayByStore.get(s.id) ?? null
-    const bh = businessHours.find(b => b.storeId === s.id && b.dayOfWeek === effectiveDow) ?? null
+    const ranges = businessHours
+      .filter(b => b.storeId === s.id && b.dayOfWeek === effectiveDow)
+      .map(b => ({ startTime: b.startTime, endTime: b.endTime }))
+      .sort((a, b) => a.startTime.localeCompare(b.startTime))
+
+    const isClosed = ranges.length === 0
+    const openTime = ranges[0]?.startTime ?? null
+    const closeTime = ranges[ranges.length - 1]?.endTime ?? null
+    // 最初の中抜け（ranges[0].endTime → ranges[1].startTime）を返す
+    const breakStartTime = ranges.length >= 2 ? ranges[0]!.endTime : null
+    const breakEndTime = ranges.length >= 2 ? ranges[1]!.startTime : null
 
     return {
       store: s,
@@ -45,12 +59,12 @@ export default defineEventHandler(async (event) => {
       holidayNote: holiday?.note ?? null,
       isPublicHoliday,
       publicHolidayName: publicHoliday?.name ?? null,
-      // BusinessHour ベースの営業時間 (Holiday の場合は意味がないが参考までに返す)
-      isClosed: bh?.isClosed ?? false,
-      openTime: bh?.openTime ?? null,
-      closeTime: bh?.closeTime ?? null,
-      breakStartTime: bh?.breakStartTime ?? null,
-      breakEndTime: bh?.breakEndTime ?? null,
+      isClosed,
+      openTime,
+      closeTime,
+      breakStartTime,
+      breakEndTime,
+      ranges,
     }
   })
 })

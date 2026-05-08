@@ -173,7 +173,7 @@ const publicHolidayName = computed(() => {
         </button>
       </div>
 
-      <ShiftMonthCalendar :month="month" />
+      <AdminShiftsShiftMonthCalendar :month="month" />
     </template>
 
     <!-- 日ビュー -->
@@ -240,7 +240,7 @@ const publicHolidayName = computed(() => {
         </div>
       </div>
 
-      <ShiftDayCalendar :date="date" />
+      <AdminShiftsShiftDayCalendar :date="date" />
     </template>
   </div>
 </template>

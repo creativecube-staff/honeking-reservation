@@ -19,6 +19,7 @@ import type { CalendarColumn, CalendarRange } from './types'
 const props = withDefaults(
   defineProps<{
     columns: CalendarColumn[]
+    ranges: CalendarRange[]
     hourStart?: number
     hourEnd?: number
     hourPx?: number
@@ -48,14 +49,27 @@ const props = withDefaults(
   },
 )
 
-const ranges = defineModel<CalendarRange[]>('ranges', { required: true })
-
 const emit = defineEmits<{
+  (e: 'update:ranges', ranges: CalendarRange[]): void
   (e: 'range-create', range: CalendarRange): void
   (e: 'range-update', range: CalendarRange): void
   (e: 'range-delete', id: string): void
   (e: 'range-click', range: CalendarRange): void
 }>()
+
+// 親から渡された ranges を内部 state にコピー。操作後に emit で親へ通知する。
+// 配列の破壊的変更（push / splice / プロパティ書き換え）を defineModel に頼らず、
+// 明示的に emit('update:ranges', ...) するため。
+const localRanges = ref<CalendarRange[]>([])
+
+watchEffect(() => {
+  // 親側 props.ranges が変わるたびに完全コピー（参照を分離）
+  localRanges.value = props.ranges.map(r => ({ ...r }))
+})
+
+function pushUpdate() {
+  emit('update:ranges', localRanges.value.map(r => ({ ...r })))
+}
 
 // ── 時刻ヘルパー ──────────────────────────────────────
 const HOURS = computed(() =>
@@ -87,12 +101,12 @@ function minutesToTop(min: number): number {
 
 // ── 衝突回避ヘルパー ────────────────────────────────────
 function rangesOfColumn(columnId: string | number): CalendarRange[] {
-  return ranges.value
+  return localRanges.value
     .filter(r => r.columnId === columnId)
     .sort((a, b) => toMinutes(a.startTime) - toMinutes(b.startTime))
 }
 function othersInColumn(columnId: string | number, selfId: string | null): CalendarRange[] {
-  return ranges.value.filter(r => r.columnId === columnId && r.id !== selfId)
+  return localRanges.value.filter(r => r.columnId === columnId && r.id !== selfId)
 }
 function maxEndBelow(columnId: string | number, selfId: string | null, value: number): number {
   let result = props.hourStart * 60
@@ -145,7 +159,7 @@ function getYInColumn(e: PointerEvent, columnId: string | number): number {
 }
 
 function findRange(id: string): CalendarRange | undefined {
-  return ranges.value.find(r => r.id === id)
+  return localRanges.value.find(r => r.id === id)
 }
 
 // ── バー操作 ──────────────────────────────────────────
@@ -206,7 +220,7 @@ function onColumnPointerDown(e: PointerEvent, columnId: string | number) {
     startTime: toTime(anchorMin),
     endTime: toTime(endMin),
   }
-  ranges.value.push(newRange)
+  localRanges.value.push(newRange)
 
   ;(e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId)
   drag.value = { kind: 'create', columnId, anchorMin, id: newId }
@@ -288,16 +302,20 @@ function onPointerUp() {
     const r = findRange(d.id)
     // 最低長未満のままなら破棄
     if (r && toMinutes(r.endTime) - toMinutes(r.startTime) < props.minDurationMin) {
-      const idx = ranges.value.findIndex(x => x.id === d.id)
-      if (idx >= 0) ranges.value.splice(idx, 1)
+      const idx = localRanges.value.findIndex(x => x.id === d.id)
+      if (idx >= 0) localRanges.value.splice(idx, 1)
     }
     else if (r) {
+      pushUpdate()
       emit('range-create', { ...r })
     }
   }
   else {
     const r = findRange(d.id)
-    if (r) emit('range-update', { ...r })
+    if (r) {
+      pushUpdate()
+      emit('range-update', { ...r })
+    }
   }
   drag.value = null
 }
@@ -306,9 +324,10 @@ function onPointerUp() {
 function onDeleteRange(id: string, e: Event) {
   if (!props.allowEdit) return
   e.stopPropagation()
-  const idx = ranges.value.findIndex(r => r.id === id)
+  const idx = localRanges.value.findIndex(r => r.id === id)
   if (idx >= 0) {
-    ranges.value.splice(idx, 1)
+    localRanges.value.splice(idx, 1)
+    pushUpdate()
     emit('range-delete', id)
   }
 }

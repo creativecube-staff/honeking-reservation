@@ -264,7 +264,7 @@ function headerNoteFor(practitionerId: number): string | null {
             {{ g.store.name }}
           </h3>
         </div>
-        <TimeColumnCalendar
+        <CalendarTimeColumnCalendar
           :ranges="rangesFor(g.columns)"
           :columns="g.columns"
           :max-ranges-per-column="1"
@@ -284,7 +284,7 @@ function headerNoteFor(practitionerId: number): string | null {
               {{ headerNoteFor(Number(column.id)) }}
             </span>
           </template>
-        </TimeColumnCalendar>
+        </CalendarTimeColumnCalendar>
       </div>
     </template>
 
@@ -298,7 +298,7 @@ function headerNoteFor(practitionerId: number): string | null {
           全スタッフ
         </h3>
       </div>
-      <TimeColumnCalendar
+      <CalendarTimeColumnCalendar
         v-model:ranges="ranges"
         :columns="allStaffColumns"
         :max-ranges-per-column="1"
@@ -314,7 +314,7 @@ function headerNoteFor(practitionerId: number): string | null {
             {{ column.subLabel }}<template v-if="headerNoteFor(Number(column.id))"> {{ headerNoteFor(Number(column.id)) }}</template>
           </span>
         </template>
-      </TimeColumnCalendar>
+      </CalendarTimeColumnCalendar>
     </div>
 
     <!-- ヘルプ先選択ポップオーバー（モーダル） -->

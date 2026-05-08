@@ -143,7 +143,7 @@ async function onSave() {
         </p>
       </div>
 
-      <TimeColumnCalendar
+      <CalendarTimeColumnCalendar
         v-model:ranges="ranges"
         :columns="columns"
         empty-label="店休"
@@ -158,7 +158,7 @@ async function onSave() {
             全曜日へ
           </button>
         </template>
-      </TimeColumnCalendar>
+      </CalendarTimeColumnCalendar>
     </div>
 
     <div class="flex items-center justify-end pt-2">

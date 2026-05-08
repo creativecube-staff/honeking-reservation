@@ -66,7 +66,7 @@ const sortedStores = computed(() => (stores.value ?? []).slice().sort((a, b) => 
 
 <template>
   <div>
-    <MonthCalendarGrid :month="month" @cell-click="onCellClick">
+    <CalendarMonthCalendarGrid :month="month" @cell-click="onCellClick">
       <template #cell="{ ymd: cellYmd, isCurrentMonth }">
         <template v-if="isCurrentMonth && summaryByDate[cellYmd]">
           <!-- 店舗ごとの出勤人数 -->
@@ -93,6 +93,6 @@ const sortedStores = computed(() => (stores.value ?? []).slice().sort((a, b) => 
           </div>
         </template>
       </template>
-    </MonthCalendarGrid>
+    </CalendarMonthCalendarGrid>
   </div>
 </template>

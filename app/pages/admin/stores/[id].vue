@@ -184,18 +184,9 @@ async function onDelete() {
       <AdminStoreBedsTab v-if="activeTab === 'beds'" :store-id="id" />
     </div>
 
-    <!-- メニュータブ（Step E-3 で実装） -->
-    <div
-      v-show="activeTab === 'menus'"
-      class="bg-white border border-[#c3c4c7] rounded-sm p-6 text-center text-slate-600"
-    >
-      <UIcon name="i-lucide-clipboard-list" class="size-8 mx-auto mb-3 text-slate-400" />
-      <p class="text-sm">
-        メニュー管理 UI は <strong>Step E-3</strong> で実装予定です。
-      </p>
-      <p class="text-xs text-slate-500 mt-2">
-        メニューの追加・編集（所要時間・価格）・削除がこのタブからできるようになります。
-      </p>
+    <!-- メニュータブ -->
+    <div v-show="activeTab === 'menus'">
+      <AdminStoreMenusTab v-if="activeTab === 'menus'" :store-id="id" />
     </div>
   </div>
 </template>

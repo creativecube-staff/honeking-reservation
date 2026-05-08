@@ -5,6 +5,9 @@ const prisma = new PrismaClient();
 // 店舗データ（仮の住所・電話番号、本番前に差し替え）
 const STORES = [
   {
+    slug: 'otakanomori',
+    prefecture: '千葉県',
+    city: '流山市',
     name: '流山おおたかの森整骨院',
     address: '千葉県流山市おおたかの森南 1-1-1',
     phone: '04-7100-0000',
@@ -13,6 +16,9 @@ const STORES = [
     practitioners: ['田中 健太', '佐藤 美咲'],
   },
   {
+    slug: 'matsudo-higashi',
+    prefecture: '千葉県',
+    city: '松戸市',
     name: '松戸駅東口整骨院',
     address: '千葉県松戸市松戸 1234-5',
     phone: '047-369-0000',
@@ -31,7 +37,7 @@ const MENUS = [
   { name: 'マッサージ 60 分', durationMinutes: 60, priceJpy: 6000, displayOrder: 5 },
 ];
 
-// 営業時間（両店共通）
+// 営業時間(両店共通)
 // 月-金: 9:30-20:30, 土日: 9:30-18:00, 共通休憩 12:30-15:00
 const BUSINESS_HOURS = [
   { dayOfWeek: 0, openTime: '09:30', closeTime: '18:00', breakStartTime: '12:30', breakEndTime: '15:00' }, // 日
@@ -43,7 +49,7 @@ const BUSINESS_HOURS = [
   { dayOfWeek: 6, openTime: '09:30', closeTime: '18:00', breakStartTime: '12:30', breakEndTime: '15:00' }, // 土
 ];
 
-// 年末年始の休業日（両店共通）
+// 年末年始の休業日(両店共通)
 const HOLIDAYS = [
   { date: '2026-12-29', note: '年末年始' },
   { date: '2026-12-30', note: '年末年始' },
@@ -53,9 +59,9 @@ const HOLIDAYS = [
   { date: '2027-01-03', note: '年末年始' },
 ];
 
-// 国民の祝日（2026-2027）
-// 2026 春分: 3/20、秋分: 9/23（2025年に閣議決定済）
-// 2027 春分: 3/21、秋分: 9/23（計算値、本番前に最新の閣議決定で再確認）
+// 国民の祝日(2026-2027)
+// 2026 春分: 3/20、秋分: 9/23(2025年に閣議決定済)
+// 2027 春分: 3/21、秋分: 9/23(計算値、本番前に最新の閣議決定で再確認)
 const PUBLIC_HOLIDAYS = [
   // 2026
   { date: '2026-01-01', name: '元日' },
@@ -113,7 +119,15 @@ async function main() {
   console.log('🏥 店舗・ベッド・施術者・メニュー・営業時間・店休日を投入...');
   for (const s of STORES) {
     const store = await prisma.store.create({
-      data: { name: s.name, address: s.address, phone: s.phone, displayOrder: s.displayOrder },
+      data: {
+        slug: s.slug,
+        prefecture: s.prefecture,
+        city: s.city,
+        name: s.name,
+        address: s.address,
+        phone: s.phone,
+        displayOrder: s.displayOrder,
+      },
     });
 
     for (let i = 1; i <= s.beds; i++) {
@@ -143,7 +157,7 @@ async function main() {
     }
   }
 
-  console.log('🎌 国民の祝日（2026-2027）を投入...');
+  console.log('🎌 国民の祝日(2026-2027)を投入...');
   for (const ph of PUBLIC_HOLIDAYS) {
     await prisma.publicHoliday.create({
       data: { date: new Date(ph.date), name: ph.name },

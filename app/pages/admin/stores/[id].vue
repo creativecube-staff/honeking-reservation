@@ -17,11 +17,13 @@ if (loadError.value) {
 }
 
 // ── タブ管理 ────────────────────────────────────────────
-type TabId = 'basic' | 'beds' | 'menus'
+type TabId = 'basic' | 'beds' | 'menus' | 'hours' | 'holidays'
 const tabs: { id: TabId, label: string }[] = [
   { id: 'basic', label: '基本情報' },
   { id: 'beds', label: 'ベッド' },
   { id: 'menus', label: 'メニュー' },
+  { id: 'hours', label: '営業時間' },
+  { id: 'holidays', label: '店休日' },
 ]
 const activeTab = computed<TabId>(() => {
   const t = String(route.query.tab ?? 'basic')
@@ -187,6 +189,16 @@ async function onDelete() {
     <!-- メニュータブ -->
     <div v-show="activeTab === 'menus'">
       <AdminStoreMenusTab v-if="activeTab === 'menus'" :store-id="id" />
+    </div>
+
+    <!-- 営業時間タブ -->
+    <div v-show="activeTab === 'hours'">
+      <AdminScheduleBusinessHoursPanel v-if="activeTab === 'hours'" :store-id="id" />
+    </div>
+
+    <!-- 店休日タブ -->
+    <div v-show="activeTab === 'holidays'">
+      <AdminScheduleHolidaysPanel v-if="activeTab === 'holidays'" :store-id="id" />
     </div>
   </div>
 </template>

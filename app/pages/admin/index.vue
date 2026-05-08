@@ -112,8 +112,8 @@ const widgets = computed(() => [
             </NuxtLink>
           </li>
           <li>
-            <NuxtLink to="/admin/schedule" class="text-blue-700 hover:text-blue-900 hover:underline">
-              営業時間 / 店休日を編集
+            <NuxtLink to="/admin/stores" class="text-blue-700 hover:text-blue-900 hover:underline">
+              営業時間 / 店休日を編集（店舗詳細のタブから）
             </NuxtLink>
           </li>
         </ul>

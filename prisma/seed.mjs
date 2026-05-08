@@ -38,16 +38,31 @@ const COMMON_MENUS = [
   { name: 'マッサージ 60 分', durationMinutes: 60, priceJpy: 6000, displayOrder: 5 },
 ];
 
-// 営業時間(両店共通)
-// 月-金: 9:30-20:30, 土日: 9:30-18:00, 共通休憩 12:30-15:00
-const BUSINESS_HOURS = [
-  { dayOfWeek: 0, openTime: '09:30', closeTime: '18:00', breakStartTime: '12:30', breakEndTime: '15:00' }, // 日
-  { dayOfWeek: 1, openTime: '09:30', closeTime: '20:30', breakStartTime: '12:30', breakEndTime: '15:00' }, // 月
-  { dayOfWeek: 2, openTime: '09:30', closeTime: '20:30', breakStartTime: '12:30', breakEndTime: '15:00' }, // 火
-  { dayOfWeek: 3, openTime: '09:30', closeTime: '20:30', breakStartTime: '12:30', breakEndTime: '15:00' }, // 水
-  { dayOfWeek: 4, openTime: '09:30', closeTime: '20:30', breakStartTime: '12:30', breakEndTime: '15:00' }, // 木
-  { dayOfWeek: 5, openTime: '09:30', closeTime: '20:30', breakStartTime: '12:30', breakEndTime: '15:00' }, // 金
-  { dayOfWeek: 6, openTime: '09:30', closeTime: '18:00', breakStartTime: '12:30', breakEndTime: '15:00' }, // 土
+// 営業時間レンジ(両店共通)
+// 1 日に複数レンジを持てる。中抜け休憩は 2 つのレンジで表現。
+// 月-金: 9:30-12:30 + 15:00-20:30, 土日: 9:30-12:30 + 15:00-18:00
+const BUSINESS_HOUR_RANGES = [
+  // 日
+  { dayOfWeek: 0, startTime: '09:30', endTime: '12:30' },
+  { dayOfWeek: 0, startTime: '15:00', endTime: '18:00' },
+  // 月
+  { dayOfWeek: 1, startTime: '09:30', endTime: '12:30' },
+  { dayOfWeek: 1, startTime: '15:00', endTime: '20:30' },
+  // 火
+  { dayOfWeek: 2, startTime: '09:30', endTime: '12:30' },
+  { dayOfWeek: 2, startTime: '15:00', endTime: '20:30' },
+  // 水
+  { dayOfWeek: 3, startTime: '09:30', endTime: '12:30' },
+  { dayOfWeek: 3, startTime: '15:00', endTime: '20:30' },
+  // 木
+  { dayOfWeek: 4, startTime: '09:30', endTime: '12:30' },
+  { dayOfWeek: 4, startTime: '15:00', endTime: '20:30' },
+  // 金
+  { dayOfWeek: 5, startTime: '09:30', endTime: '12:30' },
+  { dayOfWeek: 5, startTime: '15:00', endTime: '20:30' },
+  // 土
+  { dayOfWeek: 6, startTime: '09:30', endTime: '12:30' },
+  { dayOfWeek: 6, startTime: '15:00', endTime: '18:00' },
 ];
 
 // 年末年始の休業日(両店共通)
@@ -143,7 +158,7 @@ async function main() {
       });
     }
 
-    for (const bh of BUSINESS_HOURS) {
+    for (const bh of BUSINESS_HOUR_RANGES) {
       await prisma.businessHour.create({ data: { storeId: store.id, ...bh } });
     }
 

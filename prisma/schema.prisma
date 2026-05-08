@@ -94,23 +94,22 @@ model Menu {
   @@index([storeId])
 }
 
-// 曜日別営業時間（店舗ごとに7行: 日〜土）
+// 曜日別営業時間レンジ（1 日に 1 つ以上）
+// 店休 = その (storeId, dayOfWeek) の行が 0 件
+// 中抜け休憩は 2 つのレンジで表現する（例: 9:30-12:30, 15:00-20:30 = 12:30-15:00 が休憩）
 model BusinessHour {
-  id             Int      @id @default(autoincrement())
-  storeId        Int
-  dayOfWeek      Int // 0=日, 1=月, 2=火, 3=水, 4=木, 5=金, 6=土
-  isClosed       Boolean  @default(false)
-  openTime       String? // "HH:MM"
-  closeTime      String? // "HH:MM"
-  breakStartTime String? // "HH:MM"
-  breakEndTime   String? // "HH:MM"
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id        Int      @id @default(autoincrement())
+  storeId   Int
+  dayOfWeek Int // 0=日, 1=月, 2=火, 3=水, 4=木, 5=金, 6=土
+  startTime String // "HH:MM"
+  endTime   String // "HH:MM"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   store Store @relation(fields: [storeId], references: [id], onDelete: Restrict)
 
-  @@unique([storeId, dayOfWeek])
-  @@index([storeId])
+  @@unique([storeId, dayOfWeek, startTime])
+  @@index([storeId, dayOfWeek])
 }
 
 // 不定期休業日（年末年始・お盆・特別休業など）

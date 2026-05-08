@@ -1,6 +1,8 @@
 import { prisma } from '../../../../../utils/prisma'
 
-// 7 曜日分の営業時間を返す（不足分は isClosed=false ・時刻 null のデフォルト行で埋める）
+// 1 店舗の全営業時間レンジを返す
+// dayOfWeek 順、同一曜日内は startTime 順
+// 店休日は単に該当 dayOfWeek の行が 0 件、で表現される
 export default defineEventHandler(async (event) => {
   const storeId = Number(getRouterParam(event, 'id'))
   if (!Number.isInteger(storeId) || storeId <= 0) {
@@ -9,23 +11,14 @@ export default defineEventHandler(async (event) => {
 
   const rows = await prisma.businessHour.findMany({
     where: { storeId },
-    orderBy: { dayOfWeek: 'asc' },
+    orderBy: [{ dayOfWeek: 'asc' }, { startTime: 'asc' }],
+    select: {
+      id: true,
+      dayOfWeek: true,
+      startTime: true,
+      endTime: true,
+    },
   })
-  const byDow = new Map(rows.map(r => [r.dayOfWeek, r]))
 
-  return Array.from({ length: 7 }, (_, dayOfWeek) => {
-    const r = byDow.get(dayOfWeek)
-    return r ?? {
-      id: null as number | null,
-      storeId,
-      dayOfWeek,
-      isClosed: false,
-      openTime: null as string | null,
-      closeTime: null as string | null,
-      breakStartTime: null as string | null,
-      breakEndTime: null as string | null,
-      createdAt: null,
-      updatedAt: null,
-    }
-  })
+  return rows
 })

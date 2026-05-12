@@ -10,10 +10,11 @@ const { user, fetch: fetchSession, clear: clearSession } = useUserSession()
 // - シフト管理: 日付別、出勤時刻 + workStoreId（人手不足時のヘルプ先指定）
 const navItems = [
   { icon: 'i-lucide-home', label: 'ダッシュボード', to: '/admin' },
+  { icon: 'i-lucide-calendar-check', label: '予約管理', to: '/admin/reservations' },
+  { icon: 'i-lucide-calendar-clock', label: 'シフト管理', to: '/admin/shifts' },
   { icon: 'i-lucide-building-2', label: '店舗管理', to: '/admin/stores' },
   { icon: 'i-lucide-user-round', label: 'スタッフ管理', to: '/admin/staff' },
   { icon: 'i-lucide-clipboard-list', label: 'メニュー管理', to: '/admin/menus' },
-  { icon: 'i-lucide-calendar-clock', label: 'シフト管理', to: '/admin/shifts' },
 ] as const
 
 const route = useRoute()

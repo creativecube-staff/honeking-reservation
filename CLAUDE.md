@@ -224,9 +224,12 @@ docker compose exec nuxt sh
 - [x] README.md / CLAUDE.md 整備
 - [x] **Phase 1 開発環境構築 完了**(Supabase 接続、Nuxt 雛形、Docker 化、Nuxt UI v4、Prisma 6、btree_gist)
 - [x] **Phase 2 データモデル構築 完了**(11 モデル、EXCLUDE / CHECK 制約、PublicHoliday、シードデータ)
-- [ ] **Phase 3 お客様側 4 画面**(次ここ)
-- [ ] Phase 4 管理画面
-- [ ] Phase 5 本番準備(VPS + Supabase Pro 昇格 + Cloudflare R2 バックアップ)
+- [x] **Phase 3 お客様側予約フロー 完了**(店舗選択→メニュー→日時(時刻×曜日グリッド、◯/△/要TEL)→確認→完了、AES-256-GCM 暗号化、プライバシーポリシー)
+- [x] **Phase 4 管理画面の予約管理 完了**(一覧・検索・フィルタ・ページング、詳細・ステータス変更、手動予約作成、シフト日ビュー連動、ダッシュボード予約サマリ)
+- [ ] **Phase 5 本番準備**(次ここ。VPS + Supabase Pro 昇格 + Cloudflare R2 バックアップ + HTTPS)
+  - ⚠️ デプロイ時に **`NUXT_SESSION_COOKIE_SECURE=true`** を `.env` に必ず設定すること(dev では LAN IP HTTP 共有のため `nuxt.config.ts` で `false` に上書き中)
+  - ⚠️ **`RESERVATION_ENCRYPTION_KEY`** はバックアップ必須(消失で過去顧客情報が永久に復号不能)
+  - 2FA(TOTP)実装も Phase 5 範囲
 
 ## 参考資料
 

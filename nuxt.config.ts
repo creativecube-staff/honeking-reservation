@@ -9,4 +9,14 @@ export default defineNuxtConfig({
     preference: 'light',
     fallback: 'light',
   },
+  // セッション Cookie 設定
+  // dev: LAN IP (192.168.x.x) で HTTP アクセスする際に Cookie を送れるよう secure=false
+  // prod: .env で `NUXT_SESSION_COOKIE_SECURE=true` を必ず設定すること（HTTPS 必須）
+  runtimeConfig: {
+    session: {
+      cookie: {
+        secure: false,
+      },
+    },
+  },
 })

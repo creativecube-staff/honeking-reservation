@@ -43,6 +43,9 @@ const { data: schedule } = await useFetch<ScheduleByDate[]>(
   },
 )
 
+// ── 折りたたみ状態（店舗別モードのみ有効）─────────────
+const { isCollapsed, toggle: toggleCollapse } = useShiftStoreCollapse()
+
 // ── 表示モード（店舗別 / スタッフ別）切替 ─────────────────
 type GroupMode = 'store' | 'staff'
 const route = useRoute()
@@ -253,6 +256,18 @@ function headerNoteFor(practitionerId: number): string | null {
   const store = (stores.value ?? []).find(s => s.id === meta.workStoreId)
   return store ? `→ ${store.name}` : 'ヘルプ'
 }
+
+// ── 折りたたみヘッダー用の概要 ─────────────────────────
+// 「出勤 N 名 / 営業 HH:MM–HH:MM」を組み立てる
+function summaryFor(group: Group): { staffCount: number, openLabel: string | null, isHoliday: boolean, isClosed: boolean } {
+  const ids = new Set(group.columns.map(c => c.id))
+  const staffCount = ranges.value.filter(r => ids.has(r.columnId) && !(r as { isGhost?: boolean }).isGhost).length
+  const sched = (schedule.value ?? []).find(s => s.store.id === group.store.id)
+  if (sched?.isHoliday) return { staffCount, openLabel: null, isHoliday: true, isClosed: false }
+  if (sched?.isClosed) return { staffCount, openLabel: null, isHoliday: false, isClosed: true }
+  const openLabel = sched?.openTime && sched?.closeTime ? `${sched.openTime}–${sched.closeTime}` : null
+  return { staffCount, openLabel, isHoliday: false, isClosed: false }
+}
 </script>
 
 <template>
@@ -297,12 +312,38 @@ function headerNoteFor(practitionerId: number): string | null {
         :key="g.store.id"
         class="bg-white border border-[#c3c4c7] rounded-sm shadow-[0_1px_3px_rgba(0,0,0,0.04)]"
       >
-        <div class="px-4 py-2.5 border-b border-[#dcdcde]">
-          <h3 class="text-sm font-semibold text-slate-900">
-            {{ g.store.name }}
-          </h3>
-        </div>
+        <button
+          type="button"
+          class="w-full px-4 py-2.5 border-b border-[#dcdcde] flex items-center justify-between gap-3 hover:bg-[#f6f7f7] transition-colors text-left"
+          :class="isCollapsed(g.store.id) ? 'border-b-transparent' : ''"
+          @click="toggleCollapse(g.store.id)"
+        >
+          <div class="flex items-center gap-2">
+            <UIcon
+              :name="isCollapsed(g.store.id) ? 'i-lucide-chevron-right' : 'i-lucide-chevron-down'"
+              class="size-4 text-slate-500"
+            />
+            <h3 class="text-sm font-semibold text-slate-900">
+              {{ g.store.name }}
+            </h3>
+          </div>
+          <!-- 折りたたみ時の概要 -->
+          <span
+            v-if="isCollapsed(g.store.id)"
+            class="text-xs text-slate-600 flex items-center gap-3"
+          >
+            <span v-if="summaryFor(g).isHoliday" class="text-red-700 font-medium">🚫 店休日</span>
+            <span v-else-if="summaryFor(g).isClosed" class="text-slate-500">定休</span>
+            <template v-else>
+              <span class="tabular-nums">出勤 <strong class="text-slate-900">{{ summaryFor(g).staffCount }}</strong> / {{ g.columns.length }} 名</span>
+              <span v-if="summaryFor(g).openLabel" class="tabular-nums text-slate-500">
+                営業 {{ summaryFor(g).openLabel }}
+              </span>
+            </template>
+          </span>
+        </button>
         <CalendarTimeColumnCalendar
+          v-if="!isCollapsed(g.store.id)"
           :ranges="rangesFor(g.columns)"
           :columns="g.columns"
           :max-ranges-per-column="1"

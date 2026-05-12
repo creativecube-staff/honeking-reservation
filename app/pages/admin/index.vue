@@ -9,9 +9,40 @@ type Summary = {
   staff: number
   menus: number
   holidaysFuture: number
+  todayReservations: number
+  weekReservations: number
+  upcomingConfirmed: number
 }
 
 const { data: summary, error } = await useFetch<Summary>('/api/admin/dashboard/summary')
+
+// 予約系（オレンジ）と運営マスタ系（青）に分けて表示
+const reservationWidgets = computed(() => [
+  {
+    label: '今日の予約',
+    value: summary.value?.todayReservations ?? 0,
+    icon: 'i-lucide-calendar-check',
+    to: `/admin/reservations?from=${todayYmd()}&to=${todayYmd()}&status=CONFIRMED`,
+    actionLabel: '本日の一覧へ',
+    accent: 'orange' as const,
+  },
+  {
+    label: '今週の予約',
+    value: summary.value?.weekReservations ?? 0,
+    icon: 'i-lucide-calendar-range',
+    to: '/admin/reservations?status=CONFIRMED',
+    actionLabel: '予約一覧へ',
+    accent: 'orange' as const,
+  },
+  {
+    label: '今後の予約 (確定)',
+    value: summary.value?.upcomingConfirmed ?? 0,
+    icon: 'i-lucide-list-todo',
+    to: '/admin/reservations?status=CONFIRMED',
+    actionLabel: '予約一覧へ',
+    accent: 'orange' as const,
+  },
+])
 
 const widgets = computed(() => [
   {
@@ -43,6 +74,12 @@ const widgets = computed(() => [
     actionLabel: '店舗詳細から編集',
   },
 ])
+
+function pad(n: number): string { return String(n).padStart(2, '0') }
+function todayYmd(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
 </script>
 
 <template>
@@ -62,7 +99,32 @@ const widgets = computed(() => [
       class="mb-4"
     />
 
-    <!-- WP 風ウィジェット 4 枚 -->
+    <!-- 予約ウィジェット（オレンジ系・目立たせる）-->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+      <NuxtLink
+        v-for="w in reservationWidgets"
+        :key="w.label"
+        :to="w.to"
+        class="bg-orange-50 border-2 border-orange-300 rounded-sm p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)] hover:border-orange-500 hover:bg-orange-100 transition-colors block"
+      >
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-xs text-orange-800 mb-1 font-semibold">
+              {{ w.label }}
+            </p>
+            <p class="text-3xl font-bold text-orange-900 tabular-nums">
+              {{ w.value }}
+            </p>
+          </div>
+          <UIcon :name="w.icon" class="size-8 text-orange-400" />
+        </div>
+        <p class="text-xs text-orange-700 hover:underline mt-3">
+          {{ w.actionLabel }} →
+        </p>
+      </NuxtLink>
+    </div>
+
+    <!-- 運営マスタウィジェット 4 枚 -->
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
       <NuxtLink
         v-for="w in widgets"
@@ -97,18 +159,23 @@ const widgets = computed(() => [
         </div>
         <ul class="p-5 space-y-2 text-sm">
           <li>
-            <NuxtLink to="/admin/stores/new" class="text-blue-700 hover:text-blue-900 hover:underline">
-              + 新しい店舗を追加
+            <NuxtLink to="/admin/reservations/new" class="text-blue-700 hover:text-blue-900 hover:underline">
+              + 予約を手動で追加
             </NuxtLink>
           </li>
           <li>
-            <NuxtLink to="/admin/staff/new" class="text-blue-700 hover:text-blue-900 hover:underline">
-              + 新しいスタッフを追加
+            <NuxtLink to="/admin/reservations" class="text-blue-700 hover:text-blue-900 hover:underline">
+              予約一覧を見る
             </NuxtLink>
           </li>
           <li>
             <NuxtLink to="/admin/shifts" class="text-blue-700 hover:text-blue-900 hover:underline">
               本日のシフトを編集
+            </NuxtLink>
+          </li>
+          <li>
+            <NuxtLink to="/admin/staff/new" class="text-blue-700 hover:text-blue-900 hover:underline">
+              + 新しいスタッフを追加
             </NuxtLink>
           </li>
           <li>
@@ -129,8 +196,12 @@ const widgets = computed(() => [
           <li>
             今後の店休日: <strong class="text-slate-900">{{ summary?.holidaysFuture ?? 0 }}</strong> 件
           </li>
+          <li>
+            今後の予約 (確定): <strong class="text-slate-900">{{ summary?.upcomingConfirmed ?? 0 }}</strong> 件
+          </li>
           <li class="text-xs text-slate-500 pt-2 border-t border-[#dcdcde]">
-            予約管理 / 予約一覧は <strong>Phase 4</strong> で追加予定です。
+            予約フローはお客様側 <NuxtLink to="/" class="text-blue-700 hover:underline">トップ</NuxtLink> または管理画面の
+            <NuxtLink to="/admin/reservations/new" class="text-blue-700 hover:underline">手動予約作成</NuxtLink> から
           </li>
         </ul>
       </div>

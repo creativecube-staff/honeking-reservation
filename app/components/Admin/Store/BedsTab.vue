@@ -78,13 +78,40 @@ async function onRename(bed: Bed) {
 }
 
 async function onDeactivate(bed: Bed) {
-  if (!confirm(`ベッド「${bed.name}」を無効化しますか？`)) return
+  if (!confirm(`ベッド「${bed.name}」を無効化しますか？\n\n（一覧には残ります。後で「復活」で戻せます）`)) return
   busy.value = bed.id
   try {
     await $fetch(`/api/admin/stores/${props.storeId}/beds/${bed.id}`, {
-      method: 'DELETE',
+      method: 'PATCH',
+      body: { isActive: false },
     })
     await refresh()
+  }
+  catch (e) {
+    const err = e as { statusMessage?: string, data?: { statusMessage?: string } }
+    alert(err.data?.statusMessage || err.statusMessage || '無効化に失敗しました')
+  }
+  finally {
+    busy.value = null
+  }
+}
+
+async function onDelete(bed: Bed) {
+  if (!confirm(`ベッド「${bed.name}」を削除しますか？\n\n予約履歴がある場合は無効化のみされます（データ保護のため）。`)) return
+  busy.value = bed.id
+  try {
+    const result = await $fetch<{ mode: 'deleted' | 'deactivated', reservationCount?: number }>(
+      `/api/admin/stores/${props.storeId}/beds/${bed.id}`,
+      { method: 'DELETE' },
+    )
+    await refresh()
+    if (result.mode === 'deactivated') {
+      alert(`このベッドには予約履歴が ${result.reservationCount ?? 0} 件あるため、無効化のみ行いました。`)
+    }
+  }
+  catch (e) {
+    const err = e as { statusMessage?: string, data?: { statusMessage?: string } }
+    alert(err.data?.statusMessage || err.statusMessage || '削除に失敗しました')
   }
   finally {
     busy.value = null
@@ -207,7 +234,7 @@ async function onActivate(bed: Bed) {
                   v-if="bed.isActive"
                   type="button"
                   :disabled="busy === bed.id"
-                  class="text-red-700 hover:text-red-900 hover:underline disabled:text-slate-400"
+                  class="text-amber-700 hover:text-amber-900 hover:underline disabled:text-slate-400"
                   @click="onDeactivate(bed)"
                 >
                   無効化
@@ -220,6 +247,15 @@ async function onActivate(bed: Bed) {
                   @click="onActivate(bed)"
                 >
                   復活
+                </button>
+                <span class="text-slate-300 mx-1.5">|</span>
+                <button
+                  type="button"
+                  :disabled="busy === bed.id"
+                  class="text-red-700 hover:text-red-900 hover:underline disabled:text-slate-400"
+                  @click="onDelete(bed)"
+                >
+                  削除
                 </button>
               </div>
             </td>

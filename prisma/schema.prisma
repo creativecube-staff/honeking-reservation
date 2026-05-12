@@ -32,6 +32,8 @@ model Store {
   holidays      Holiday[]
   closures      Closure[]
   reservations  Reservation[]
+  products      Product[]
+  productSales  ProductSale[]
   // ヘルプ勤務の back-relation: Shift.workStoreId が指す Shift 一覧。
   // メイン所属（Practitioner.storeId）とは別。null の Shift はメイン店舗で勤務する想定。
   workShifts    Shift[]        @relation("ShiftWorkStore")
@@ -84,6 +86,7 @@ model Practitioner {
   store        Store         @relation(fields: [storeId], references: [id], onDelete: Restrict)
   shifts       Shift[]
   reservations Reservation[]
+  soldSales    ProductSale[]
 
   @@index([storeId])
 }
@@ -204,11 +207,19 @@ model Shift {
 }
 
 // 予約ステータス
+// 「完了」は明示的なステータスを持たず、CONFIRMED かつ終了時刻が過去という条件で
+// アプリ層が自動判定する（shared/reservationStatus.ts の displayStatus 参照）。
 enum ReservationStatus {
   CONFIRMED
   CANCELLED
-  COMPLETED
   NO_SHOW
+}
+
+// 商品種別
+// PRODUCT = 物販（在庫あり）、VOUCHER = 回数券（在庫概念なし、N 回分）
+enum ProductKind {
+  PRODUCT
+  VOUCHER
 }
 
 // スタッフの役職
@@ -235,6 +246,8 @@ model Customer {
   updatedAt DateTime @updatedAt
 
   reservations Reservation[]
+  productSales ProductSale[]
+  vouchers     CustomerVoucher[]
 }
 
 // 予約（1ベッド + 1施術者 + 1メニュー + 時間帯）
@@ -259,10 +272,144 @@ model Reservation {
   practitioner Practitioner @relation(fields: [practitionerId], references: [id], onDelete: Restrict)
   menu         Menu         @relation(fields: [menuId], references: [id], onDelete: Restrict)
   customer     Customer     @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  histories    ReservationHistory[]
+  productSales ProductSale[]
+  // 1 予約 = 0 or 1 回数券消費。VoucherUsage が存在すると売上ゼロ扱い
+  voucherUsage VoucherUsage?
 
   @@index([storeId, startAt])
   @@index([practitionerId, startAt])
   @@index([bedId, startAt])
   @@index([customerId])
   @@index([startAt])
+}
+
+// 予約の変更履歴（時間変更・メニュー変更・スタッフ/ベッド変更・ステータス変更を 1 行ずつ記録）
+// changedByPractitionerId は操作した管理ユーザー（Practitioner）。削除時の影響を避けるため nullable。
+// changedByName は操作時点での名前を別途保存し、後で名前を変えても履歴の表示が壊れないようにする。
+model ReservationHistory {
+  id              Int      @id @default(autoincrement())
+  reservationId   Int
+  changedAt       DateTime @default(now())
+  changedByPractitionerId Int?
+  changedByName   String
+
+  // 変更前のスナップショット
+  prevStartAt        DateTime
+  prevEndAt          DateTime
+  prevStatus         ReservationStatus
+  prevMenuId         Int
+  prevPractitionerId Int
+  prevBedId          Int
+
+  // 変更後のスナップショット
+  newStartAt        DateTime
+  newEndAt          DateTime
+  newStatus         ReservationStatus
+  newMenuId         Int
+  newPractitionerId Int
+  newBedId          Int
+
+  note String?
+
+  reservation Reservation @relation(fields: [reservationId], references: [id], onDelete: Restrict)
+
+  @@index([reservationId, changedAt])
+}
+
+// 商品マスタ
+// kind=PRODUCT: 物販。stock を消費する。
+// kind=VOUCHER: 回数券。stock は使わず、voucherTotalUses が「1 枚あたりの利用回数」。
+// storeId=null は共通商品（全店で販売可）、指定すると店舗特別商品。
+// メニュー設計と同じ二階建て。
+model Product {
+  id           Int         @id @default(autoincrement())
+  storeId      Int?
+  kind         ProductKind @default(PRODUCT)
+  name         String
+  description  String?
+  priceJpy     Int
+  // 物販時のみ意味を持つ在庫数。VOUCHER では 0 のまま使わない。
+  stock        Int         @default(0)
+  // VOUCHER 専用: 1 枚購入したら何回分の施術が受けられるか（例: 10）
+  voucherTotalUses Int?
+  isActive     Boolean     @default(true)
+  displayOrder Int         @default(0)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  store Store? @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  sales ProductSale[]
+  vouchers CustomerVoucher[]
+
+  // (storeId, name) で店舗特別商品の一意性を保証。共通商品（storeId IS NULL）の重複防止は migration 側の部分 unique index で対応する。
+  @@unique([storeId, name])
+  @@index([storeId])
+  @@index([kind])
+}
+
+// 販売記録（物販 + 回数券販売の両方）
+// unitPriceJpyAtSale は販売時点での単価スナップショット。後で priceJpy を変えても履歴は残る。
+// reservationId は紐付け任意。「来店ついでに購入」のときは設定する。
+model ProductSale {
+  id                   Int       @id @default(autoincrement())
+  productId            Int
+  storeId              Int
+  customerId           Int
+  reservationId        Int?
+  quantity             Int
+  unitPriceJpyAtSale   Int
+  soldAt               DateTime  @default(now())
+  soldByPractitionerId Int?
+  note                 String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  product       Product        @relation(fields: [productId], references: [id], onDelete: Restrict)
+  store         Store          @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  customer      Customer       @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  reservation   Reservation?   @relation(fields: [reservationId], references: [id], onDelete: Restrict)
+  soldByPractitioner Practitioner? @relation(fields: [soldByPractitionerId], references: [id], onDelete: Restrict)
+  // 回数券販売（kind=VOUCHER）のときに 1 対 1 で発行される
+  voucher       CustomerVoucher?
+
+  @@index([storeId, soldAt])
+  @@index([customerId])
+  @@index([reservationId])
+  @@index([productId])
+}
+
+// 顧客が保有している回数券（販売 1 件 = 回数券 1 枚）
+// 残回数 0 になっても物理削除はせず、履歴として残す。
+model CustomerVoucher {
+  id              Int      @id @default(autoincrement())
+  customerId      Int
+  productId       Int
+  productSaleId   Int      @unique
+  totalUses       Int
+  remainingUses   Int
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  customer    Customer    @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  product     Product     @relation(fields: [productId], references: [id], onDelete: Restrict)
+  productSale ProductSale @relation(fields: [productSaleId], references: [id], onDelete: Restrict)
+  usages      VoucherUsage[]
+
+  @@index([customerId])
+}
+
+// 予約に対する回数券消費。1 予約 = 0 または 1 回まで（reservationId に unique 制約）。
+// この行が存在する予約は売上ゼロ扱い（回数券販売日に売上計上済みのため）。
+model VoucherUsage {
+  id                Int      @id @default(autoincrement())
+  customerVoucherId Int
+  reservationId     Int      @unique
+  usedAt            DateTime @default(now())
+  createdAt         DateTime @default(now())
+
+  customerVoucher CustomerVoucher @relation(fields: [customerVoucherId], references: [id], onDelete: Restrict)
+  reservation     Reservation     @relation(fields: [reservationId], references: [id], onDelete: Restrict)
+
+  @@index([customerVoucherId])
 }

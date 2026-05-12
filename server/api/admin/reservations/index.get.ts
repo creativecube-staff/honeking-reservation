@@ -6,7 +6,7 @@ import { prisma } from '../../../utils/prisma'
 // 管理画面: 予約一覧
 // クエリ:
 //   ?storeId        絞り込み（省略 = 全店舗）
-//   ?status         CONFIRMED | CANCELLED | COMPLETED | NO_SHOW (省略 = 全部)
+//   ?status         CONFIRMED | CANCELLED | NO_SHOW (省略 = 全部)
 //   ?from=YYYY-MM-DD&to=YYYY-MM-DD  日付範囲（startAt ベース）
 //   ?q              顧客名 / 電話 / メール / 予約コード で検索（hash 一致で個人情報を復号せず検索可能）
 //   ?page=1&pageSize=50  ページネーション
@@ -25,7 +25,7 @@ export default defineEventHandler(async (event) => {
 
   const where: Prisma.ReservationWhereInput = {}
   if (storeId) where.storeId = storeId
-  if (['CONFIRMED', 'CANCELLED', 'COMPLETED', 'NO_SHOW'].includes(status)) {
+  if (['CONFIRMED', 'CANCELLED', 'NO_SHOW'].includes(status)) {
     where.status = status as Prisma.ReservationWhereInput['status']
   }
   if (/^\d{4}-\d{2}-\d{2}$/.test(fromStr) && /^\d{4}-\d{2}-\d{2}$/.test(toStr)) {

@@ -1,5 +1,7 @@
 <script setup lang="ts">
-definePageMeta({ layout: 'admin' })
+import { displayStatus, DISPLAY_STATUS_LABEL, type DbStatus } from '~~/shared/reservationStatus'
+
+definePageMeta({ layout: 'admin', requirePermission: 'reservation:view' })
 
 const route = useRoute()
 const router = useRouter()
@@ -7,7 +9,7 @@ const router = useRouter()
 type Store = { id: number, name: string }
 type Reservation = {
   id: number
-  status: 'CONFIRMED' | 'CANCELLED' | 'COMPLETED' | 'NO_SHOW'
+  status: DbStatus
   confirmationCode: string
   startAt: string
   endAt: string
@@ -40,7 +42,7 @@ const storeIdFilter = computed<number | null>({
 const statusFilter = computed<string>({
   get() {
     const q = String(route.query.status ?? '')
-    return ['CONFIRMED', 'CANCELLED', 'COMPLETED', 'NO_SHOW'].includes(q) ? q : ''
+    return ['CONFIRMED', 'CANCELLED', 'NO_SHOW'].includes(q) ? q : ''
   },
   set(v) {
     router.replace({ query: { ...route.query, status: v || undefined, page: undefined } })
@@ -130,19 +132,15 @@ function fmtJstTime(iso: string): string {
   return `${pad(jst.getUTCHours())}:${pad(jst.getUTCMinutes())}`
 }
 
-function statusBadge(status: string): { label: string, class: string } {
-  switch (status) {
-    case 'CONFIRMED':
-      return { label: '予約済', class: 'bg-green-100 text-green-800 border-green-300' }
-    case 'CANCELLED':
-      return { label: 'キャンセル', class: 'bg-slate-100 text-slate-500 border-slate-300 line-through' }
-    case 'COMPLETED':
-      return { label: '完了', class: 'bg-blue-100 text-blue-800 border-blue-300' }
-    case 'NO_SHOW':
-      return { label: '無断キャンセル', class: 'bg-red-100 text-red-800 border-red-300' }
-    default:
-      return { label: status, class: 'bg-slate-100 text-slate-700 border-slate-300' }
-  }
+// 表示用ステータス: DB の status と endAt から自動判定（CONFIRMED + 終了済 = 完了）
+function statusBadge(r: Reservation): { label: string, class: string } {
+  const s = displayStatus(r.status, r.endAt)
+  const cls
+    = s === 'UPCOMING' ? 'bg-green-100 text-green-800 border-green-300'
+      : s === 'COMPLETED' ? 'bg-blue-100 text-blue-800 border-blue-300'
+        : s === 'NO_SHOW' ? 'bg-red-100 text-red-800 border-red-300'
+          : 'bg-slate-100 text-slate-500 border-slate-300 line-through'
+  return { label: DISPLAY_STATUS_LABEL[s], class: cls }
 }
 
 function clearFilters() {
@@ -155,25 +153,80 @@ function goPage(p: number) {
   if (data.value && p > data.value.totalPages) return
   pageNum.value = p
 }
+
+// 物販販売フォーム
+const saleMode = ref(false)
+
+// 予約に紐付かない独立販売（同期間）を時系列で混在表示
+type StandaloneSale = {
+  id: number
+  storeId: number
+  store: { id: number, name: string }
+  product: { id: number, name: string, kind: 'PRODUCT' | 'VOUCHER' }
+  customer: { id: number, name: string | null }
+  quantity: number
+  unitPriceJpyAtSale: number
+  soldAt: string
+  soldByPractitioner: { id: number, name: string } | null
+}
+
+const standaloneSalesQuery = computed(() => {
+  const q: Record<string, string> = { noReservation: 'true' }
+  if (storeIdFilter.value) q.storeId = String(storeIdFilter.value)
+  if (fromFilter.value) q.from = fromFilter.value
+  if (toFilter.value) q.to = toFilter.value
+  return q
+})
+
+const { data: standaloneSales, refresh: refreshStandaloneSales } = await useFetch<StandaloneSale[]>('/api/admin/sales', {
+  query: standaloneSalesQuery,
+  watch: [standaloneSalesQuery],
+})
+
+async function onSaleAdded() {
+  saleMode.value = false
+  await Promise.all([refresh(), refreshStandaloneSales()])
+}
+
+function yen(n: number): string { return n.toLocaleString('ja-JP') }
 </script>
 
 <template>
   <div>
     <div class="flex items-center gap-3 mb-1 flex-wrap">
       <h1 class="text-2xl font-semibold text-slate-900">
-        予約管理
+        予約・販売管理
       </h1>
-      <NuxtLink
-        to="/admin/reservations/new"
-        class="ml-auto px-3 py-1.5 text-sm bg-orange-500 hover:bg-orange-600 text-white rounded-sm inline-flex items-center gap-1"
-      >
-        <UIcon name="i-lucide-plus" class="size-4" />
-        手動で予約を追加
-      </NuxtLink>
+      <div class="ml-auto flex items-center gap-2">
+        <button
+          v-if="hasPermission('sale:edit')"
+          type="button"
+          class="px-3 py-1.5 text-sm border border-purple-300 bg-purple-50 hover:bg-purple-100 text-purple-800 rounded-sm inline-flex items-center gap-1"
+          @click="saleMode = !saleMode"
+        >
+          <UIcon name="i-lucide-shopping-cart" class="size-4" />
+          {{ saleMode ? '物販販売フォームを閉じる' : '物販販売を追加' }}
+        </button>
+        <NuxtLink
+          to="/admin/reservations/new"
+          class="px-3 py-1.5 text-sm bg-orange-500 hover:bg-orange-600 text-white rounded-sm inline-flex items-center gap-1"
+        >
+          <UIcon name="i-lucide-plus" class="size-4" />
+          手動で予約を追加
+        </NuxtLink>
+      </div>
     </div>
     <p class="text-sm text-slate-600 mb-4">
-      お客様側で取られた予約と、管理画面から手動で入力した予約を一覧で確認・操作します。
+      予約と物販販売を一括管理。物販だけ買いに来たお客様もここから登録できます。
     </p>
+
+    <!-- 物販販売フォーム（インライン展開） -->
+    <AdminReservationsQuickSale
+      v-if="saleMode"
+      :stores="stores ?? []"
+      @added="onSaleAdded"
+      @close="saleMode = false"
+    />
 
     <!-- フィルター -->
     <div class="bg-white border border-[#c3c4c7] rounded-sm p-3 mb-4 flex flex-wrap items-end gap-3">
@@ -202,10 +255,7 @@ function goPage(p: number) {
             すべて
           </option>
           <option value="CONFIRMED">
-            予約済
-          </option>
-          <option value="COMPLETED">
-            完了
+            予約済（完了含む）
           </option>
           <option value="NO_SHOW">
             無断キャンセル
@@ -279,7 +329,7 @@ function goPage(p: number) {
       </button>
     </div>
 
-    <!-- テーブル -->
+    <!-- 予約一覧テーブル -->
     <div class="bg-white border border-[#c3c4c7] rounded-sm shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-x-auto">
       <table class="w-full text-sm border-collapse min-w-[920px]">
         <thead class="bg-[#f6f7f7]">
@@ -334,8 +384,8 @@ function goPage(p: number) {
               <span class="text-slate-500">{{ r.bed.name }}</span>
             </td>
             <td class="px-3 py-2 border-b border-[#dcdcde]">
-              <span class="inline-block px-2 py-0.5 text-xs font-semibold rounded border" :class="statusBadge(r.status).class">
-                {{ statusBadge(r.status).label }}
+              <span class="inline-block px-2 py-0.5 text-xs font-semibold rounded border" :class="statusBadge(r).class">
+                {{ statusBadge(r).label }}
               </span>
             </td>
           </tr>
@@ -364,6 +414,72 @@ function goPage(p: number) {
       >
         次 →
       </button>
+    </div>
+
+    <!-- 予約に紐付かない物販販売 -->
+    <div v-if="hasPermission('sale:view') && (standaloneSales?.length ?? 0) > 0" class="mt-8">
+      <div class="flex items-baseline gap-2 mb-2">
+        <h2 class="text-base font-semibold text-slate-900">
+          物販販売（予約なし）
+        </h2>
+        <span class="text-xs text-slate-500">
+          {{ standaloneSales?.length ?? 0 }} 件
+        </span>
+      </div>
+      <p class="text-xs text-slate-600 mb-2">
+        予約に紐付かず、店頭で物販・回数券だけ販売した記録です。
+      </p>
+      <div class="bg-white border border-[#c3c4c7] rounded-sm shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-x-auto">
+        <table class="w-full text-sm border-collapse">
+          <thead class="bg-[#f6f7f7]">
+            <tr>
+              <th class="text-left px-3 py-2 font-semibold text-slate-700 border-b border-[#dcdcde]">
+                販売日時
+              </th>
+              <th class="text-left px-3 py-2 font-semibold text-slate-700 border-b border-[#dcdcde]">
+                店舗
+              </th>
+              <th class="text-left px-3 py-2 font-semibold text-slate-700 border-b border-[#dcdcde]">
+                商品
+              </th>
+              <th class="text-left px-3 py-2 font-semibold text-slate-700 border-b border-[#dcdcde]">
+                お客様
+              </th>
+              <th class="text-right px-3 py-2 font-semibold text-slate-700 border-b border-[#dcdcde]">
+                金額
+              </th>
+              <th class="text-left px-3 py-2 font-semibold text-slate-700 border-b border-[#dcdcde]">
+                担当
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="s in standaloneSales ?? []" :key="s.id" class="border-b border-[#f0f0f1] last:border-b-0 hover:bg-[#f6f7f7]">
+              <td class="px-3 py-2 tabular-nums">
+                {{ fmtJstDateTime(s.soldAt) }}
+              </td>
+              <td class="px-3 py-2">
+                {{ s.store.name }}
+              </td>
+              <td class="px-3 py-2">
+                <span class="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-sm border mr-1" :class="s.product.kind === 'VOUCHER' ? 'bg-purple-50 text-purple-800 border-purple-300' : 'bg-slate-100 text-slate-700 border-slate-300'">
+                  {{ s.product.kind === 'VOUCHER' ? '回数券' : '物販' }}
+                </span>
+                {{ s.product.name }} × {{ s.quantity }}
+              </td>
+              <td class="px-3 py-2">
+                {{ s.customer.name ?? '(復号失敗)' }}
+              </td>
+              <td class="px-3 py-2 text-right tabular-nums font-semibold">
+                ¥{{ yen(s.unitPriceJpyAtSale * s.quantity) }}
+              </td>
+              <td class="px-3 py-2 text-xs text-slate-600">
+                {{ s.soldByPractitioner?.name ?? '—' }}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 </template>

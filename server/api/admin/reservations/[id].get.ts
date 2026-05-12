@@ -17,6 +17,24 @@ export default defineEventHandler(async (event) => {
       practitioner: { select: { id: true, name: true, storeId: true } },
       menu: { select: { id: true, name: true, durationMinutes: true, priceJpy: true } },
       customer: { select: { id: true, name: true, phone: true, email: true } },
+      // 変更履歴（新しい順）
+      histories: { orderBy: { changedAt: 'desc' } },
+      // この予約に紐付いた物販・回数券販売
+      productSales: {
+        orderBy: { soldAt: 'asc' },
+        include: {
+          product: { select: { id: true, name: true, kind: true, voucherTotalUses: true } },
+          voucher: { select: { id: true, totalUses: true, remainingUses: true } },
+        },
+      },
+      // 回数券消費（あれば 1 件）。あると売上ゼロ扱い
+      voucherUsage: {
+        include: {
+          customerVoucher: {
+            include: { product: { select: { id: true, name: true } } },
+          },
+        },
+      },
     },
   })
   if (!r) {

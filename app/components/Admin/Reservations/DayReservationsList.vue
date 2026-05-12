@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // シフト日ビュー下に置く「その日の予約」パネル。
 // 指定日の予約を時刻順で並べ、クリックで詳細ページへ。
+import { displayStatus, DISPLAY_STATUS_LABEL, type DbStatus } from '~~/shared/reservationStatus'
 
 const props = defineProps<{
   date: string // YYYY-MM-DD
@@ -8,7 +9,7 @@ const props = defineProps<{
 
 type Reservation = {
   id: number
-  status: 'CONFIRMED' | 'CANCELLED' | 'COMPLETED' | 'NO_SHOW'
+  status: DbStatus
   confirmationCode: string
   startAt: string
   endAt: string
@@ -39,19 +40,15 @@ function fmtJstTime(iso: string): string {
   return `${pad(jst.getUTCHours())}:${pad(jst.getUTCMinutes())}`
 }
 
-function statusBadge(status: string): { label: string, class: string } {
-  switch (status) {
-    case 'CONFIRMED':
-      return { label: '予約済', class: 'bg-green-100 text-green-800' }
-    case 'CANCELLED':
-      return { label: 'ｷｬﾝｾﾙ', class: 'bg-slate-200 text-slate-500 line-through' }
-    case 'COMPLETED':
-      return { label: '完了', class: 'bg-blue-100 text-blue-800' }
-    case 'NO_SHOW':
-      return { label: 'NoShow', class: 'bg-red-100 text-red-800' }
-    default:
-      return { label: status, class: 'bg-slate-100 text-slate-700' }
-  }
+// 表示用ステータスは「DB の status + endAt」から判定する（CONFIRMED + 終了済 = 完了）
+function statusBadge(r: Reservation): { label: string, class: string } {
+  const s = displayStatus(r.status, r.endAt)
+  const cls
+    = s === 'UPCOMING' ? 'bg-green-100 text-green-800'
+      : s === 'COMPLETED' ? 'bg-blue-100 text-blue-800'
+        : s === 'NO_SHOW' ? 'bg-red-100 text-red-800'
+          : 'bg-slate-200 text-slate-500 line-through'
+  return { label: DISPLAY_STATUS_LABEL[s], class: cls }
 }
 
 // 店舗ごとにグループ化
@@ -121,8 +118,8 @@ function gotoDetail(id: number) {
                 <template v-if="r.customer.phone"> · 📞 {{ r.customer.phone }}</template>
               </div>
             </div>
-            <span class="inline-block px-2 py-0.5 text-[10px] font-semibold rounded shrink-0" :class="statusBadge(r.status).class">
-              {{ statusBadge(r.status).label }}
+            <span class="inline-block px-2 py-0.5 text-[10px] font-semibold rounded shrink-0" :class="statusBadge(r).class">
+              {{ statusBadge(r).label }}
             </span>
           </li>
         </ul>

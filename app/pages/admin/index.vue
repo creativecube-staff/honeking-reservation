@@ -3,6 +3,14 @@ definePageMeta({ layout: 'admin' })
 
 const { user } = useUserSession()
 
+type RevenueBucket = {
+  storeId: number
+  storeName: string
+  menu: number
+  sale: number
+  total: number
+}
+
 type Summary = {
   stores: number
   beds: number
@@ -12,6 +20,8 @@ type Summary = {
   todayReservations: number
   weekReservations: number
   upcomingConfirmed: number
+  revenueToday: RevenueBucket[]
+  revenueThisMonth: RevenueBucket[]
 }
 
 const { data: summary, error } = await useFetch<Summary>('/api/admin/dashboard/summary')
@@ -80,6 +90,15 @@ function todayYmd(): string {
   const d = new Date()
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
+function yen(n: number): string { return n.toLocaleString('ja-JP') }
+
+// 今月の合計売上（全店）
+const monthTotal = computed(() => {
+  return (summary.value?.revenueThisMonth ?? []).reduce((sum, b) => sum + b.total, 0)
+})
+const todayTotal = computed(() => {
+  return (summary.value?.revenueToday ?? []).reduce((sum, b) => sum + b.total, 0)
+})
 </script>
 
 <template>
@@ -98,6 +117,52 @@ function todayYmd(): string {
       :title="`概要の取得に失敗しました: ${error.message}`"
       class="mb-4"
     />
+
+    <!-- 売上カード（店舗別） -->
+    <div v-if="hasPermission('sale:view')" class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+      <div class="bg-white border border-[#c3c4c7] rounded-sm shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+        <div class="px-5 py-3 border-b border-[#dcdcde] flex items-center justify-between">
+          <h2 class="text-base font-semibold text-slate-900">
+            本日の売上
+          </h2>
+          <span class="text-xl font-bold text-slate-900 tabular-nums">
+            ¥{{ yen(todayTotal) }}
+          </span>
+        </div>
+        <ul class="p-5 space-y-1.5 text-sm">
+          <li v-for="b in summary?.revenueToday ?? []" :key="b.storeId" class="flex items-baseline justify-between gap-2">
+            <span class="text-slate-700">{{ b.storeName }}</span>
+            <span class="text-xs text-slate-500 tabular-nums">
+              施術 ¥{{ yen(b.menu) }} + 物販 ¥{{ yen(b.sale) }} =
+            </span>
+            <span class="font-semibold text-slate-900 tabular-nums">¥{{ yen(b.total) }}</span>
+          </li>
+        </ul>
+      </div>
+
+      <div class="bg-white border border-[#c3c4c7] rounded-sm shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+        <div class="px-5 py-3 border-b border-[#dcdcde] flex items-center justify-between">
+          <h2 class="text-base font-semibold text-slate-900">
+            今月の売上
+          </h2>
+          <span class="text-xl font-bold text-slate-900 tabular-nums">
+            ¥{{ yen(monthTotal) }}
+          </span>
+        </div>
+        <ul class="p-5 space-y-1.5 text-sm">
+          <li v-for="b in summary?.revenueThisMonth ?? []" :key="b.storeId" class="flex items-baseline justify-between gap-2">
+            <span class="text-slate-700">{{ b.storeName }}</span>
+            <span class="text-xs text-slate-500 tabular-nums">
+              施術 ¥{{ yen(b.menu) }} + 物販 ¥{{ yen(b.sale) }} =
+            </span>
+            <span class="font-semibold text-slate-900 tabular-nums">¥{{ yen(b.total) }}</span>
+          </li>
+        </ul>
+        <p class="px-5 pb-3 text-xs text-slate-500">
+          ※ 回数券は購入日に計上、消費日は売上ゼロ
+        </p>
+      </div>
+    </div>
 
     <!-- 予約ウィジェット（オレンジ系・目立たせる）-->
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">

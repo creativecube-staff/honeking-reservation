@@ -80,7 +80,8 @@ export default defineEventHandler(async (event) => {
     prisma.closure.findMany({ where: { storeId: store.id, date: { gte: fromDate, lte: toDate } } }),
     prisma.publicHoliday.findMany({ where: { date: { gte: fromDate, lte: toDate } } }),
     prisma.bed.findMany({ where: { storeId: store.id, isActive: true }, select: { id: true } }),
-    prisma.practitioner.findMany({ where: { isActive: true }, select: { id: true, storeId: true } }),
+    // 予約に割り当て可能なスタッフのみ（オーナー等の特別アカウントは除外）
+    prisma.practitioner.findMany({ where: { isActive: true, isAssignable: true }, select: { id: true, storeId: true } }),
     // この店舗で勤務するシフト = workStoreId が当店 OR (workStoreId IS NULL AND practitioner.storeId = 当店)
     prisma.shift.findMany({
       where: {

@@ -1,13 +1,21 @@
 <script setup lang="ts">
 import { createStaffSchema, type StaffFormState } from '~~/shared/schemas/staff'
 
-definePageMeta({ layout: 'admin' })
+definePageMeta({ layout: 'admin', requirePermission: 'staff:edit' })
 
-const state = reactive<Partial<StaffFormState>>({
+// canLogin の状態によって username/role/password の必須性が変わる。
+// バリデーションは shared/schemas/staff.ts の createStaffSchema が担当する。
+const state = reactive<Partial<StaffFormState & { password?: string }>>({
   storeId: undefined,
   name: '',
   displayOrder: 0,
   isActive: true,
+  isAssignable: true,
+  canLogin: false,
+  username: '',
+  role: null,
+  permissions: [],
+  password: '',
 })
 
 const fieldErrors = ref<Record<string, string>>({})

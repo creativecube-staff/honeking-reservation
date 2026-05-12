@@ -54,13 +54,30 @@ model Bed {
   @@index([storeId])
 }
 
-// 施術者（店舗固定、掛け持ちなし）
+// スタッフ（施術者・受付・店長・オーナーを含む店舗の所属者）
+// 「予約に割り当てられるか」と「ログインできるか」を別フラグで管理し、
+// 施術しない受付や店長もここに集約する。
+//
+// - isAssignable: 予約・シフトに割り当てられるか（false = 受付・経理など施術しない人）
+// - canLogin: 管理画面にログインできるか（false = 施術専門で管理画面を触らない人）
+// - canLogin = true の人は username / passwordHash / role が必須（DB CHECK で担保するのが理想だが、現状は API 層で保証）
 model Practitioner {
   id           Int      @id @default(autoincrement())
   storeId      Int
   name         String
   displayOrder Int      @default(0)
   isActive     Boolean  @default(true)
+  // 予約割当可否（施術者なら true、受付・経理なら false）
+  isAssignable Boolean  @default(true)
+
+  // ログイン情報（canLogin=false ならすべて null/空でよい）
+  canLogin     Boolean  @default(false)
+  username     String?  @unique
+  passwordHash String?
+  role         Role?
+  permissions  String[] @default([])
+  totpSecret   String? // Phase 5 で 2FA 有効化用
+
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -192,6 +209,17 @@ enum ReservationStatus {
   CANCELLED
   COMPLETED
   NO_SHOW
+}
+
+// スタッフの役職
+// 役職は「呼び方」と「初期権限テンプレート」の役目。
+// 実際の権限制御は Practitioner.permissions（個別上書き）と shared/permissions.ts の
+// ROLE_DEFAULT_PERMISSIONS を合成して判定する。
+enum Role {
+  OWNER        // オーナー（経営者）: 全権限
+  MANAGER      // 店長: ほぼ全権限（スタッフ管理含む）
+  RECEPTIONIST // 受付: 予約管理中心
+  PRACTITIONER // 施術者: 自分のシフト・予約閲覧中心
 }
 
 // 顧客（個人情報は AES-256-GCM で暗号化された値を保存。検索は *Hash カラムで行う）

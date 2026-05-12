@@ -48,8 +48,9 @@ const visibleMenus = computed(() => {
   return (menus.value ?? []).filter(m => m.isActive && (m.storeId === null || m.storeId === form.storeId))
 })
 
+// 予約に割り当てられるスタッフのみ（オーナー等の特別アカウントは除外）
 const { data: practitioners } = await useFetch<Practitioner[]>('/api/admin/staff', {
-  query: { status: 'active' },
+  query: { status: 'active', assignable: 'true' },
 })
 const visiblePractitioners = computed(() => {
   if (!form.storeId) return []

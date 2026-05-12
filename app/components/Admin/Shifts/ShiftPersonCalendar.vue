@@ -34,8 +34,9 @@ function ymdOf(d: Date): string {
 }
 
 // ── スタッフ一覧 ───────────────────────────────────────
+// 予約に割り当てられるスタッフのみ（オーナー等の特別アカウントは除外）
 const { data: staffList } = await useFetch<StaffWithStore[]>('/api/admin/staff', {
-  query: { status: 'active' },
+  query: { status: 'active', assignable: 'true' },
 })
 const { data: stores } = await useFetch<Store[]>('/api/admin/stores', {
   query: { status: 'active' },

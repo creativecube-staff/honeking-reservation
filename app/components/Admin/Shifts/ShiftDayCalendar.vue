@@ -25,8 +25,9 @@ type ScheduleByDate = {
 const { data: stores } = await useFetch<Store[]>('/api/admin/stores', {
   query: { status: 'active' },
 })
+// 予約に割り当てられるスタッフのみ（オーナー等の特別アカウントは除外）
 const { data: staffList } = await useFetch<StaffWithStore[]>('/api/admin/staff', {
-  query: { status: 'active' },
+  query: { status: 'active', assignable: 'true' },
 })
 const { data: shifts, refresh: refreshShifts } = await useFetch<ShiftWithJoins[]>(
   '/api/admin/shifts',

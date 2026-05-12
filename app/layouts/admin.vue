@@ -1,21 +1,34 @@
 <script setup lang="ts">
 // WordPress 風管理画面レイアウト。
 // 上部 admin bar（黒紺帯、高さ 32px）+ 左サイドバー（黒紺、幅 180px）+ メイン（白背景）。
+import type { Permission } from '~~/shared/permissions'
+import { ROLE_LABEL } from '~~/shared/permissions'
+
 const { user, fetch: fetchSession, clear: clearSession } = useUserSession()
 
-// ナビ定義。
+// ナビ定義。各項目に必要 permission を紐付け、ユーザーの permissions でフィルタする。
 // - 店舗管理: 基本情報・ベッド・特別メニュー・営業時間・店休日をタブで集約
-// - スタッフ管理: 全店舗のスタッフを横断管理（メイン店舗で絞り込み）
+// - スタッフ管理: 全店舗のスタッフを横断管理（メイン店舗で絞り込み）。ログイン情報・役職もここで設定
 // - メニュー管理: 共通メニュー（全店舗で利用可能）の管理。店舗ごとの特別メニューは店舗詳細から
 // - シフト管理: 日付別、出勤時刻 + workStoreId（人手不足時のヘルプ先指定）
-const navItems = [
-  { icon: 'i-lucide-home', label: 'ダッシュボード', to: '/admin' },
-  { icon: 'i-lucide-calendar-check', label: '予約管理', to: '/admin/reservations' },
-  { icon: 'i-lucide-calendar-clock', label: 'シフト管理', to: '/admin/shifts' },
-  { icon: 'i-lucide-building-2', label: '店舗管理', to: '/admin/stores' },
-  { icon: 'i-lucide-user-round', label: 'スタッフ管理', to: '/admin/staff' },
-  { icon: 'i-lucide-clipboard-list', label: 'メニュー管理', to: '/admin/menus' },
-] as const
+const allNavItems: ReadonlyArray<{ icon: string, label: string, to: string, permission: Permission }> = [
+  { icon: 'i-lucide-home', label: 'ダッシュボード', to: '/admin', permission: 'dashboard:view' },
+  { icon: 'i-lucide-calendar-check', label: '予約管理', to: '/admin/reservations', permission: 'reservation:view' },
+  { icon: 'i-lucide-calendar-clock', label: 'シフト管理', to: '/admin/shifts', permission: 'shift:view' },
+  { icon: 'i-lucide-building-2', label: '店舗管理', to: '/admin/stores', permission: 'store:view' },
+  { icon: 'i-lucide-user-round', label: 'スタッフ管理', to: '/admin/staff', permission: 'staff:view' },
+  { icon: 'i-lucide-clipboard-list', label: 'メニュー管理', to: '/admin/menus', permission: 'menu:view' },
+]
+
+const navItems = computed(() => {
+  const perms = user.value?.permissions ?? []
+  return allNavItems.filter(item => perms.includes(item.permission))
+})
+
+const userRoleLabel = computed(() => {
+  const role = user.value?.role
+  return role ? ROLE_LABEL[role] : ''
+})
 
 const route = useRoute()
 function isActive(to: string) {
@@ -45,7 +58,12 @@ async function logout() {
         </NuxtLink>
       </div>
       <div class="flex items-center gap-3">
-        <span>こんにちは、<span class="text-white font-medium">{{ user?.username ?? '' }}</span> さん</span>
+        <span>
+          こんにちは、<span class="text-white font-medium">{{ user?.displayName ?? user?.username ?? '' }}</span> さん
+          <span v-if="userRoleLabel" class="ml-1 text-[10px] px-1.5 py-0.5 rounded bg-[#2c3338] text-[#c3c4c7]">
+            {{ userRoleLabel }}
+          </span>
+        </span>
         <button class="hover:text-orange-400" @click="logout">
           ログアウト
         </button>

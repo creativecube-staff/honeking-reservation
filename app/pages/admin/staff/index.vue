@@ -1,9 +1,24 @@
 <script setup lang="ts">
-import type { Practitioner, Store } from '@prisma/client'
+import type { Store } from '@prisma/client'
+import { ROLE_LABEL, type Permission, type RoleName } from '~~/shared/permissions'
 
-definePageMeta({ layout: 'admin' })
+definePageMeta({ layout: 'admin', requirePermission: 'staff:view' })
 
-type StaffWithStore = Practitioner & { store: Pick<Store, 'id' | 'name' | 'slug'> }
+type StaffWithStore = {
+  id: number
+  storeId: number
+  name: string
+  displayOrder: number
+  isActive: boolean
+  isAssignable: boolean
+  canLogin: boolean
+  username: string | null
+  role: RoleName | null
+  permissions: Permission[]
+  createdAt: string
+  updatedAt: string
+  store: Pick<Store, 'id' | 'name' | 'slug'>
+}
 
 type Status = 'all' | 'active' | 'inactive'
 const status = ref<Status>('all')
@@ -156,8 +171,8 @@ const dateFmt = new Intl.DateTimeFormat('ja-JP', {
             <th class="px-3 py-2.5 text-left font-semibold border-b border-[#c3c4c7]">
               メイン店舗
             </th>
-            <th class="px-3 py-2.5 text-right font-semibold border-b border-[#c3c4c7]">
-              表示順
+            <th class="px-3 py-2.5 text-left font-semibold border-b border-[#c3c4c7]">
+              役職 / ログイン
             </th>
             <th class="px-3 py-2.5 text-left font-semibold border-b border-[#c3c4c7]">
               状態
@@ -215,9 +230,22 @@ const dateFmt = new Intl.DateTimeFormat('ja-JP', {
             </td>
             <td class="px-3 py-2.5 align-top">
               {{ s.store.name }}
+              <div v-if="!s.isAssignable" class="text-xs text-slate-500 mt-1">
+                予約割当なし
+              </div>
             </td>
-            <td class="px-3 py-2.5 align-top text-right tabular-nums">
-              {{ s.displayOrder }}
+            <td class="px-3 py-2.5 align-top">
+              <div v-if="s.canLogin && s.role" class="flex flex-col gap-1">
+                <span class="inline-flex items-center text-xs text-slate-700 bg-slate-100 border border-slate-300 px-2 py-0.5 rounded-sm w-fit">
+                  {{ ROLE_LABEL[s.role] }}
+                </span>
+                <span class="text-xs text-slate-500">
+                  ID: {{ s.username }}
+                </span>
+              </div>
+              <span v-else class="text-xs text-slate-400">
+                ログイン不可
+              </span>
             </td>
             <td class="px-3 py-2.5 align-top">
               <span

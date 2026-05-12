@@ -55,9 +55,9 @@ const days = computed(() => {
 
 const weekEnd = computed(() => days.value[6]!.ymd)
 
-// データ取得
+// データ取得（予約割当可能なスタッフのみ。オーナー等の特別アカウントは除外）
 const { data: staffList } = await useFetch<StaffWithStore[]>('/api/admin/staff', {
-  query: { status: 'active' },
+  query: { status: 'active', assignable: 'true' },
 })
 const { data: shifts } = await useFetch<ShiftWithJoins[]>('/api/admin/shifts', {
   query: computed(() => ({ from: props.weekStart, to: weekEnd.value })),

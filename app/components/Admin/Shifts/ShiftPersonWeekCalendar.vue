@@ -34,9 +34,9 @@ function ymdOf(d: Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 
-// マスタ取得
+// マスタ取得（予約割当可能なスタッフのみ。オーナー等の特別アカウントは除外）
 const { data: staffList } = await useFetch<StaffWithStore[]>('/api/admin/staff', {
-  query: { status: 'active' },
+  query: { status: 'active', assignable: 'true' },
 })
 const { data: stores } = await useFetch<Store[]>('/api/admin/stores', {
   query: { status: 'active' },

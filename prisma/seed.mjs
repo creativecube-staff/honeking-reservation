@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
@@ -178,6 +179,29 @@ async function main() {
   for (const ph of PUBLIC_HOLIDAYS) {
     await prisma.publicHoliday.create({
       data: { date: new Date(ph.date), name: ph.name },
+    });
+  }
+
+  console.log('👤 オーナースタッフ(ログイン可)を投入...');
+  // env 由来の管理者を OWNER として Practitioner に 1 人作成。
+  // 施術はしない想定なので isAssignable=false。env が未設定なら開発用デフォルトで作る。
+  const adminUsername = process.env.ADMIN_USER ?? 'admin';
+  const adminPasswordHash = process.env.ADMIN_PASSWORD_HASH ?? bcrypt.hashSync('admin123', 10);
+  const firstStore = await prisma.store.findFirst({ orderBy: { id: 'asc' } });
+  if (firstStore) {
+    await prisma.practitioner.create({
+      data: {
+        storeId: firstStore.id,
+        name: 'オーナー',
+        displayOrder: 9999,
+        isActive: true,
+        isAssignable: false,
+        canLogin: true,
+        username: adminUsername,
+        passwordHash: adminPasswordHash,
+        role: 'OWNER',
+        permissions: [],
+      },
     });
   }
 

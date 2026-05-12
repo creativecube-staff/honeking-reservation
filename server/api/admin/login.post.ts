@@ -1,4 +1,9 @@
 import bcrypt from 'bcryptjs'
+import { prisma } from '~~/server/utils/prisma'
+import { resolvePermissions } from '~~/shared/permissions'
+
+// ユーザー名不一致時のタイミング攻撃対策。bcrypt の比較時間を揃えるためのダミーハッシュ。
+const DUMMY_HASH = '$2a$10$invalidinvalidinvalidinvalidinvalidinvalidinvalidinvalid'
 
 const loginSchema = (body: unknown): { username: string, password: string } => {
   if (!body || typeof body !== 'object') throw createError({ statusCode: 400, statusMessage: 'Invalid body' })
@@ -12,23 +17,26 @@ const loginSchema = (body: unknown): { username: string, password: string } => {
 export default defineEventHandler(async (event) => {
   const { username, password } = loginSchema(await readBody(event))
 
-  const adminUser = process.env.ADMIN_USER
-  const adminHash = process.env.ADMIN_PASSWORD_HASH
+  // ログイン許可スタッフのみ対象。isActive=false や canLogin=false なら拒否。
+  const staff = await prisma.practitioner.findUnique({ where: { username } })
 
-  if (!adminUser || !adminHash) {
-    throw createError({ statusCode: 500, statusMessage: 'Admin credentials not configured' })
-  }
+  // ユーザーが居なくてもダミーハッシュで比較し、タイミング差から「存在するか」を漏らさない。
+  const passOk = await bcrypt.compare(password, staff?.passwordHash ?? DUMMY_HASH)
 
-  const userOk = username === adminUser
-  // bcrypt.compare はユーザー名不一致時もダミーハッシュで比較してタイミング差を抑える
-  const passOk = await bcrypt.compare(password, userOk ? adminHash : '$2a$10$invalidinvalidinvalidinvalidinvalidinvalidinvalidinvalid')
-
-  if (!userOk || !passOk) {
+  if (!staff || !passOk || !staff.canLogin || !staff.isActive || !staff.role) {
     throw createError({ statusCode: 401, statusMessage: 'ユーザー名またはパスワードが違います' })
   }
 
+  const permissions = resolvePermissions(staff.role, staff.permissions)
+
   await setUserSession(event, {
-    user: { username },
+    user: {
+      id: staff.id,
+      username: staff.username!,
+      displayName: staff.name,
+      role: staff.role,
+      permissions,
+    },
     loggedInAt: new Date().toISOString(),
   })
 

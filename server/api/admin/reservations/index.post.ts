@@ -219,7 +219,8 @@ export default defineEventHandler(async (event) => {
       }
       catch (e) {
         if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
-          throw createError({ statusCode: 409, statusMessage: '同名で別連絡先のお客様が既に存在します' })
+          // phoneHash か emailHash の衝突（findUnique 直後の競合作成、レア）
+          throw createError({ statusCode: 409, statusMessage: '同じ電話番号またはメールアドレスのお客様が既に登録されています' })
         }
         throw e
       }

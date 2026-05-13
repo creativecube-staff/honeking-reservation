@@ -172,44 +172,64 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 409, statusMessage: '空いている施術者がいません' })
   }
 
-  // 顧客 upsert（電話 OR メールハッシュで検索）
-  const customerName = customer.name.trim()
-  const customerPhone = (customer.phone ?? '').trim()
-  const customerEmail = (customer.email ?? '').trim()
-  const nameHash = hashName(customerName)
-  const phoneHash = customerPhone ? hashPhone(customerPhone) : null
-  const emailHash = customerEmail ? hashEmail(customerEmail) : null
-
+  // 顧客の特定
+  // 会員ログイン中ならセッションから Customer を直接特定し、body の name/phone/email は無視する。
+  // ゲスト予約は従来通り phone/email ハッシュで upsert する。
   let customerRow: { id: number } | null = null
-  if (phoneHash) {
-    customerRow = await prisma.customer.findUnique({ where: { phoneHash }, select: { id: true } })
-  }
-  if (!customerRow && emailHash) {
-    customerRow = await prisma.customer.findUnique({ where: { emailHash }, select: { id: true } })
-  }
-  if (!customerRow) {
-    try {
-      customerRow = await prisma.customer.create({
-        data: {
-          name: encryptUtf8(customerName),
-          nameHash,
-          phone: customerPhone ? encryptUtf8(customerPhone) : null,
-          phoneHash,
-          email: customerEmail ? encryptUtf8(customerEmail) : null,
-          emailHash,
-        },
-        select: { id: true },
+  const session = await getUserSession(event)
+  if (session.member?.id) {
+    const member = await prisma.customer.findUnique({
+      where: { id: session.member.id },
+      select: { id: true, emailVerifiedAt: true },
+    })
+    if (!member || !member.emailVerifiedAt) {
+      // セッションは残ってるが DB 側が無効化された
+      throw createError({
+        statusCode: 401,
+        statusMessage: '会員セッションが無効です。再度ログインしてください。',
       })
     }
-    catch (e) {
-      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
-        // nameHash 衝突 → 同名で別連絡先のお客様が既存。お問合せ案内
-        throw createError({
-          statusCode: 409,
-          statusMessage: 'お客様情報の登録に失敗しました。お電話でお問い合わせください。',
+    customerRow = { id: member.id }
+  }
+  else {
+    // ゲスト予約: 既存の upsert フロー
+    const customerName = customer.name.trim()
+    const customerPhone = (customer.phone ?? '').trim()
+    const customerEmail = (customer.email ?? '').trim()
+    const nameHash = hashName(customerName)
+    const phoneHash = customerPhone ? hashPhone(customerPhone) : null
+    const emailHash = customerEmail ? hashEmail(customerEmail) : null
+
+    if (phoneHash) {
+      customerRow = await prisma.customer.findUnique({ where: { phoneHash }, select: { id: true } })
+    }
+    if (!customerRow && emailHash) {
+      customerRow = await prisma.customer.findUnique({ where: { emailHash }, select: { id: true } })
+    }
+    if (!customerRow) {
+      try {
+        customerRow = await prisma.customer.create({
+          data: {
+            name: encryptUtf8(customerName),
+            nameHash,
+            phone: customerPhone ? encryptUtf8(customerPhone) : null,
+            phoneHash,
+            email: customerEmail ? encryptUtf8(customerEmail) : null,
+            emailHash,
+          },
+          select: { id: true },
         })
       }
-      throw e
+      catch (e) {
+        if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+          // phoneHash か emailHash の衝突（findUnique 直後の競合作成、レア）
+          throw createError({
+            statusCode: 409,
+            statusMessage: '同じ電話番号またはメールアドレスのお客様が既に登録されています。お電話でお問い合わせください。',
+          })
+        }
+        throw e
+      }
     }
   }
 

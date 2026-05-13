@@ -64,13 +64,13 @@ model Bed {
 // - canLogin: 管理画面にログインできるか（false = 施術専門で管理画面を触らない人）
 // - canLogin = true の人は username / passwordHash / role が必須（DB CHECK で担保するのが理想だが、現状は API 層で保証）
 model Practitioner {
-  id           Int      @id @default(autoincrement())
+  id           Int     @id @default(autoincrement())
   storeId      Int
   name         String
-  displayOrder Int      @default(0)
-  isActive     Boolean  @default(true)
+  displayOrder Int     @default(0)
+  isActive     Boolean @default(true)
   // 予約割当可否（施術者なら true、受付・経理なら false）
-  isAssignable Boolean  @default(true)
+  isAssignable Boolean @default(true)
 
   // ログイン情報（canLogin=false ならすべて null/空でよい）
   canLogin     Boolean  @default(false)
@@ -80,8 +80,8 @@ model Practitioner {
   permissions  String[] @default([])
   totpSecret   String? // Phase 5 で 2FA 有効化用
 
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   store        Store         @relation(fields: [storeId], references: [id], onDelete: Restrict)
   shifts       Shift[]
@@ -227,27 +227,101 @@ enum ProductKind {
 // 実際の権限制御は Practitioner.permissions（個別上書き）と shared/permissions.ts の
 // ROLE_DEFAULT_PERMISSIONS を合成して判定する。
 enum Role {
-  OWNER        // オーナー（経営者）: 全権限
-  MANAGER      // 店長: ほぼ全権限（スタッフ管理含む）
+  OWNER // オーナー（経営者）: 全権限
+  MANAGER // 店長: ほぼ全権限（スタッフ管理含む）
   RECEPTIONIST // 受付: 予約管理中心
   PRACTITIONER // 施術者: 自分のシフト・予約閲覧中心
 }
 
 // 顧客（個人情報は AES-256-GCM で暗号化された値を保存。検索は *Hash カラムで行う）
+//
+// 会員制（Phase 1〜）について:
+// - passwordHash がセットされている顧客 = 会員登録済み
+// - emailVerifiedAt がセットされている顧客 = 本登録完了（メール認証済み）
+// - ゲスト予約のみの顧客は passwordHash も emailVerifiedAt も null
+// - 仮登録段階（メール認証待ち）は passwordHash あり / emailVerifiedAt null
 model Customer {
-  id        Int      @id @default(autoincrement())
-  name      String
-  nameHash  String   @unique
-  phone     String?
-  phoneHash String?  @unique
-  email     String?
-  emailHash String?  @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id              Int       @id @default(autoincrement())
+  name            String
+  // nameHash: 暗号化された name を検索可能にするための SHA-256 ハッシュ。
+  // unique 制約は付けない（同姓同名の顧客が現実に存在するため）。
+  // 検索性能のために通常 index は維持する。
+  nameHash        String
+  phone           String?
+  phoneHash       String?   @unique
+  email           String?
+  emailHash       String?   @unique
+  passwordHash    String?
+  emailVerifiedAt DateTime?
+  lastLoginAt     DateTime?
+  // 会員規約・プライバシーポリシーへの同意記録（消費者契約法・定型約款対策）
+  // 同意した時点のバージョン文字列（例: "v1.0-2026-05-13"）も併記し、後で規約改定時の追跡を可能にする
+  termsAgreedAt          DateTime?
+  termsVersionAgreedAt   String?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
 
-  reservations Reservation[]
-  productSales ProductSale[]
-  vouchers     CustomerVoucher[]
+  reservations            Reservation[]
+  productSales            ProductSale[]
+  vouchers                CustomerVoucher[]
+  emailVerificationTokens EmailVerificationToken[]
+  passwordResetTokens     PasswordResetToken[]
+  emailChangeTokens       EmailChangeToken[]
+
+  // 管理画面の顧客検索・予約検索で nameHash 完全一致を引くため非ユニークの index を付ける
+  @@index([nameHash])
+}
+
+// 会員仮登録 → 本登録の中継トークン
+// 仮登録時に発行 → メールリンククリックで Customer.emailVerifiedAt を set + 該当トークンを usedAt set
+// 期限切れトークンは別途バッチで削除（当面は手運用でも問題ない量）
+model EmailVerificationToken {
+  id         Int       @id @default(autoincrement())
+  customerId Int
+  token      String    @unique
+  expiresAt  DateTime
+  usedAt     DateTime?
+  createdAt  DateTime  @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
+
+  @@index([customerId])
+}
+
+// パスワードリセットトークン
+// 「リセットメール送って」リクエストで発行 → リンクから新パスワード設定で usedAt set
+// 存在しないメアドへのリクエストも 200 を返す（メアド存在の漏洩防止）ためトークン発行は実在ユーザーのみ
+model PasswordResetToken {
+  id         Int       @id @default(autoincrement())
+  customerId Int
+  token      String    @unique
+  expiresAt  DateTime
+  usedAt     DateTime?
+  createdAt  DateTime  @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
+
+  @@index([customerId])
+}
+
+// メアド変更トークン
+// マイページから「メアドを変更」した時点で発行 → 新メアド宛にリンク送信 → クリックで Customer.email/emailHash を更新
+// 確定までは古いメアドが有効なので、未確定状態でも会員機能は使い続けられる
+// 新メアド (newEmail) はアプリ層で AES-256-GCM 暗号化、newEmailHash は SHA-256 で一意性確認用
+model EmailChangeToken {
+  id            Int       @id @default(autoincrement())
+  customerId    Int
+  newEmail      String // 暗号化値
+  newEmailHash  String // sha256 (一意性確認・重複登録防止)
+  token         String    @unique
+  expiresAt     DateTime
+  usedAt        DateTime?
+  createdAt     DateTime  @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
+
+  @@index([customerId])
+  @@index([newEmailHash])
 }
 
 // 予約（1ベッド + 1施術者 + 1メニュー + 時間帯）
@@ -267,11 +341,11 @@ model Reservation {
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
 
-  store        Store        @relation(fields: [storeId], references: [id], onDelete: Restrict)
-  bed          Bed          @relation(fields: [bedId], references: [id], onDelete: Restrict)
-  practitioner Practitioner @relation(fields: [practitionerId], references: [id], onDelete: Restrict)
-  menu         Menu         @relation(fields: [menuId], references: [id], onDelete: Restrict)
-  customer     Customer     @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  store        Store                @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  bed          Bed                  @relation(fields: [bedId], references: [id], onDelete: Restrict)
+  practitioner Practitioner         @relation(fields: [practitionerId], references: [id], onDelete: Restrict)
+  menu         Menu                 @relation(fields: [menuId], references: [id], onDelete: Restrict)
+  customer     Customer             @relation(fields: [customerId], references: [id], onDelete: Restrict)
   histories    ReservationHistory[]
   productSales ProductSale[]
   // 1 予約 = 0 or 1 回数券消費。VoucherUsage が存在すると売上ゼロ扱い
@@ -288,11 +362,11 @@ model Reservation {
 // changedByPractitionerId は操作した管理ユーザー（Practitioner）。削除時の影響を避けるため nullable。
 // changedByName は操作時点での名前を別途保存し、後で名前を変えても履歴の表示が壊れないようにする。
 model ReservationHistory {
-  id              Int      @id @default(autoincrement())
-  reservationId   Int
-  changedAt       DateTime @default(now())
+  id                      Int      @id @default(autoincrement())
+  reservationId           Int
+  changedAt               DateTime @default(now())
   changedByPractitionerId Int?
-  changedByName   String
+  changedByName           String
 
   // 変更前のスナップショット
   prevStartAt        DateTime
@@ -323,23 +397,23 @@ model ReservationHistory {
 // storeId=null は共通商品（全店で販売可）、指定すると店舗特別商品。
 // メニュー設計と同じ二階建て。
 model Product {
-  id           Int         @id @default(autoincrement())
-  storeId      Int?
-  kind         ProductKind @default(PRODUCT)
-  name         String
-  description  String?
-  priceJpy     Int
+  id               Int         @id @default(autoincrement())
+  storeId          Int?
+  kind             ProductKind @default(PRODUCT)
+  name             String
+  description      String?
+  priceJpy         Int
   // 物販時のみ意味を持つ在庫数。VOUCHER では 0 のまま使わない。
-  stock        Int         @default(0)
+  stock            Int         @default(0)
   // VOUCHER 専用: 1 枚購入したら何回分の施術が受けられるか（例: 10）
   voucherTotalUses Int?
-  isActive     Boolean     @default(true)
-  displayOrder Int         @default(0)
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
+  isActive         Boolean     @default(true)
+  displayOrder     Int         @default(0)
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
 
-  store Store? @relation(fields: [storeId], references: [id], onDelete: Restrict)
-  sales ProductSale[]
+  store    Store?            @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  sales    ProductSale[]
   vouchers CustomerVoucher[]
 
   // (storeId, name) で店舗特別商品の一意性を保証。共通商品（storeId IS NULL）の重複防止は migration 側の部分 unique index で対応する。
@@ -352,26 +426,26 @@ model Product {
 // unitPriceJpyAtSale は販売時点での単価スナップショット。後で priceJpy を変えても履歴は残る。
 // reservationId は紐付け任意。「来店ついでに購入」のときは設定する。
 model ProductSale {
-  id                   Int       @id @default(autoincrement())
+  id                   Int      @id @default(autoincrement())
   productId            Int
   storeId              Int
   customerId           Int
   reservationId        Int?
   quantity             Int
   unitPriceJpyAtSale   Int
-  soldAt               DateTime  @default(now())
+  soldAt               DateTime @default(now())
   soldByPractitionerId Int?
   note                 String?
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
-  product       Product        @relation(fields: [productId], references: [id], onDelete: Restrict)
-  store         Store          @relation(fields: [storeId], references: [id], onDelete: Restrict)
-  customer      Customer       @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  reservation   Reservation?   @relation(fields: [reservationId], references: [id], onDelete: Restrict)
-  soldByPractitioner Practitioner? @relation(fields: [soldByPractitionerId], references: [id], onDelete: Restrict)
+  product            Product          @relation(fields: [productId], references: [id], onDelete: Restrict)
+  store              Store            @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  customer           Customer         @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  reservation        Reservation?     @relation(fields: [reservationId], references: [id], onDelete: Restrict)
+  soldByPractitioner Practitioner?    @relation(fields: [soldByPractitionerId], references: [id], onDelete: Restrict)
   // 回数券販売（kind=VOUCHER）のときに 1 対 1 で発行される
-  voucher       CustomerVoucher?
+  voucher            CustomerVoucher?
 
   @@index([storeId, soldAt])
   @@index([customerId])
@@ -382,18 +456,18 @@ model ProductSale {
 // 顧客が保有している回数券（販売 1 件 = 回数券 1 枚）
 // 残回数 0 になっても物理削除はせず、履歴として残す。
 model CustomerVoucher {
-  id              Int      @id @default(autoincrement())
-  customerId      Int
-  productId       Int
-  productSaleId   Int      @unique
-  totalUses       Int
-  remainingUses   Int
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id            Int      @id @default(autoincrement())
+  customerId    Int
+  productId     Int
+  productSaleId Int      @unique
+  totalUses     Int
+  remainingUses Int
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  customer    Customer    @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  product     Product     @relation(fields: [productId], references: [id], onDelete: Restrict)
-  productSale ProductSale @relation(fields: [productSaleId], references: [id], onDelete: Restrict)
+  customer    Customer       @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  product     Product        @relation(fields: [productId], references: [id], onDelete: Restrict)
+  productSale ProductSale    @relation(fields: [productSaleId], references: [id], onDelete: Restrict)
   usages      VoucherUsage[]
 
   @@index([customerId])

@@ -1,9 +1,8 @@
 <script setup lang="ts">
+import { MEMBERSHIP_BADGE, type Membership } from '~~/shared/membership'
 import { displayStatus, DISPLAY_STATUS_LABEL, type DbStatus } from '~~/shared/reservationStatus'
 
 definePageMeta({ layout: 'admin', requirePermission: 'customer:view' })
-
-type Membership = 'member' | 'pending' | 'guest' | 'withdrawn'
 
 type CustomerDetail = {
   id: number
@@ -108,32 +107,8 @@ const { data: vouchers, status: voucherStatus } = await useFetch<Voucher[]>(`/ap
 })
 
 // ── 表示ヘルパ ───────────────────────────────────────
-function pad(n: number): string { return String(n).padStart(2, '0') }
-function fmtJstDate(iso: string | null): string {
-  if (!iso) return '—'
-  const d = new Date(iso)
-  const jst = new Date(d.getTime() + 9 * 3600_000)
-  return `${jst.getUTCFullYear()}/${pad(jst.getUTCMonth() + 1)}/${pad(jst.getUTCDate())}`
-}
-function fmtJstDateTime(iso: string | null): string {
-  if (!iso) return '—'
-  const d = new Date(iso)
-  const jst = new Date(d.getTime() + 9 * 3600_000)
-  return `${jst.getUTCFullYear()}/${pad(jst.getUTCMonth() + 1)}/${pad(jst.getUTCDate())} ${pad(jst.getUTCHours())}:${pad(jst.getUTCMinutes())}`
-}
-function fmtJstTime(iso: string): string {
-  const d = new Date(iso)
-  const jst = new Date(d.getTime() + 9 * 3600_000)
-  return `${pad(jst.getUTCHours())}:${pad(jst.getUTCMinutes())}`
-}
-function yen(n: number): string { return n.toLocaleString('ja-JP') }
-
-function membershipBadge(m: Membership): { label: string, class: string } {
-  if (m === 'withdrawn') return { label: '退会済', class: 'bg-slate-200 text-slate-600 border-slate-400' }
-  if (m === 'member') return { label: '本会員', class: 'bg-green-100 text-green-800 border-green-300' }
-  if (m === 'pending') return { label: '仮登録（メール未認証）', class: 'bg-amber-100 text-amber-800 border-amber-300' }
-  return { label: 'ゲスト', class: 'bg-slate-100 text-slate-700 border-slate-300' }
-}
+// fmtJstDate / fmtJstDateTime / fmtJstTime / yen は app/utils/format.ts の auto-import 経由。
+// 会員区分バッジは shared/membership.ts の MEMBERSHIP_BADGE を流用。
 
 function statusBadge(r: Reservation): { label: string, class: string } {
   const s = displayStatus(r.status, r.endAt)
@@ -291,9 +266,9 @@ async function saveNote() {
       <span
         v-if="customer"
         class="inline-block px-2 py-0.5 text-xs font-semibold rounded border"
-        :class="membershipBadge(customer.membership).class"
+        :class="MEMBERSHIP_BADGE[customer.membership].class"
       >
-        {{ membershipBadge(customer.membership).label }}
+        {{ MEMBERSHIP_BADGE[customer.membership].label }}
       </span>
       <span
         v-if="customer?.withdrawnAt"
@@ -428,8 +403,8 @@ async function saveNote() {
                 会員区分
               </dt>
               <dd>
-                <span class="inline-block px-2 py-0.5 text-xs font-semibold rounded border" :class="membershipBadge(customer.membership).class">
-                  {{ membershipBadge(customer.membership).label }}
+                <span class="inline-block px-2 py-0.5 text-xs font-semibold rounded border" :class="MEMBERSHIP_BADGE[customer.membership].class">
+                  {{ MEMBERSHIP_BADGE[customer.membership].label }}
                 </span>
               </dd>
             </div>

@@ -47,7 +47,3 @@ export async function getOrCreateGuestCustomer(): Promise<{ id: number }> {
   cachedGuestId = created.id
   return created
 }
-
-export function isGuestCustomerName(decryptedName: string | null): boolean {
-  return decryptedName === GUEST_NAME
-}

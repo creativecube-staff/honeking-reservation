@@ -145,27 +145,53 @@ Supabase Free は **1週間アクセスなしで一時停止**する点に注意
 
 ## データモデル方針
 
-主要テーブル(Phase 2 完了時点で全 11 モデル + 1 enum):
+主要テーブル(Phase 5 までで拡張済):
 
 - `Store` - 店舗マスタ
 - `Bed` - ベッド(Store に紐づく)
-- `Practitioner` - 施術者(Store に紐づく、店舗固定)
-- `Menu` - メニュー(Store に紐づく、店舗ごと個別)
+- `Practitioner` - スタッフ(施術者・受付・店長)。`isAssignable` で予約割当可否、`canLogin` でログイン可否を分離
+- `Menu` - メニュー(共通メニュー `storeId IS NULL` + 店舗特別メニューの 2 階建て)
 - `BusinessHour` - 曜日別営業時間レンジ(1 日に 1 つ以上、中抜け休憩は 2 レンジで表現)
 - `Holiday` - 終日休み(1 日まるごと営業しない日)
 - `Closure` - 部分閉店(イレギュラーで一定時間だけ休み、同日複数行可)
 - `PublicHoliday` - 国民の祝日(全店舗共通・営業はする / 日曜扱い運用)
-- `Shift` - 施術者シフト(1 施術者 × 1 日 = 1 行)
+- `Shift` - 施術者シフト(`workStoreId` でヘルプ先店舗を指定)
 - `Customer` - 顧客(個人情報は暗号化済み値、検索は `*Hash` カラム)
+  - 会員機能: `passwordHash` / `emailVerifiedAt` で本会員と仮登録を判定
+  - `withdrawnAt`: 退会日時(退会後もデータは残し、ゲスト顧客に格下げ)
+  - `note`: 管理者専用の接客メモ(PII を書かない前提のため暗号化なし)
+  - 「店頭ふらっと販売用」固定 Customer を `server/utils/guestCustomer.ts` で lazy-create
 - `Reservation` - 予約(Store + Bed + Practitioner + Menu + 時間帯)
-- `enum ReservationStatus` - `CONFIRMED` / `CANCELLED` / `COMPLETED` / `NO_SHOW`
+- `ReservationHistory` - 予約変更履歴(時間 / メニュー / 担当 / ベッド / ステータスの変更を記録)
+- `Product` - 商品マスタ(`kind=PRODUCT` 物販 / `kind=VOUCHER` 回数券)
+- `ProductSale` - 販売記録(予約紐付け任意、ゲスト購入は固定 Customer)
+- `CustomerVoucher` - 顧客保有の回数券(残回数管理)
+- `VoucherUsage` - 予約での回数券消費(1 予約 = 0 or 1 枚)
+- 会員系: `EmailVerificationToken` / `PasswordResetToken` / `EmailChangeToken`
+- `enum ReservationStatus` - `CONFIRMED` / `CANCELLED` / `NO_SHOW`
+  - 「完了」は status=CONFIRMED かつ endAt 過去 のアプリ層判定(`shared/reservationStatus.ts`)
+- `enum ProductKind` - `PRODUCT` / `VOUCHER`
+- `enum Role` - `OWNER` / `MANAGER` / `RECEPTIONIST` / `PRACTITIONER`
 
 全エンティティ `id: Int @id @default(autoincrement())` を採用(UUIDには変えない)。
 `createdAt` / `updatedAt` は必要なテーブルに付与済(ほぼ全テーブル)。
 
 すべての FK は `onDelete: Restrict`。物理削除は防ぎ、不要レコードは `isActive: false` の論理削除で表現。
 
-## URL 設計(お客様側予約フロー Phase 3)
+## 権限 (shared/permissions.ts)
+
+役職テンプレート × 個別 permission overrides で最終的な権限を解決。
+
+- `OWNER` / `MANAGER`: 全権限
+- `RECEPTIONIST`: 予約・販売・シフト閲覧 + 顧客閲覧
+- `PRACTITIONER`: 自分のシフト・予約 + 物販販売
+
+権限名は `<resource>:<action>` 形式 (`reservation:view`, `customer:edit`, `sale:edit` など)。
+ページ側は `definePageMeta({ requirePermission: 'xxx:yyy' })` で宣言、サーバ側は `requirePermission(event, 'xxx:yyy')` で検証。
+
+## URL 設計
+
+### お客様側予約フロー (Phase 3)
 
 ```text
 /                                                            ← 店舗選択
@@ -175,7 +201,45 @@ Supabase Free は **1週間アクセスなしで一時停止**する点に注意
 /reserve/complete/[code]                                     ← 完了画面
 ```
 
+### 会員マイページ (Phase 5)
+
+```text
+/signup / /login / /forgot-email / /verify-email/[token] / /password-reset/[token]
+/me                       ← マイページトップ
+/me/profile               ← 氏名・電話の編集
+/me/email-change          ← メアド変更(リンク認証)
+/me/password              ← パスワード変更
+/me/reservations          ← 自分の予約履歴
+/me/withdraw              ← 退会(ゲスト格下げ + withdrawnAt 記録)
+```
+
+### 管理画面
+
+```text
+/admin                    ← ダッシュボード
+/admin/reservations       ← 予約・販売管理(一覧⇄スケジュールビュー切替)
+/admin/customers          ← 顧客管理(会員区分タブ・休眠フィルタ)
+/admin/customers/[id]     ← 顧客詳細(基本情報・来店履歴・販売・回数券)
+/admin/shifts             ← シフト管理(月/週/日/スタッフ別)
+/admin/stores             ← 店舗管理(ベッド・特別メニュー・営業時間)
+/admin/staff              ← スタッフ管理(ログイン情報・権限)
+/admin/menus              ← 共通メニュー管理
+/admin/products           ← 商品マスタ
+/admin/sales              ← 売上管理
+```
+
 URL に状態を載せる方針(リロードに強く、シェア可能、戻るボタンが自然に動く)。
+フィルタ・タブ・並び順・ページなどはすべてクエリパラメータで表現する。
+
+## 共通ユーティリティ / コンポーネント
+
+- `app/utils/format.ts` - JST 日付フォーマッタ + 円表記。Nuxt の auto-import 経由で全画面から利用。
+- `shared/membership.ts` - 顧客の会員区分判定 + バッジ表示クラス。
+- `shared/reservationStatus.ts` - DB ステータス → 表示ステータスの変換(`displayStatus`)。
+- `shared/permissions.ts` - 権限名定義 + 役職別デフォルト。
+- `app/components/Base/PillTabs.vue` - ピル形タブボタン(顧客タブ・予約ステータスタブで利用)。
+- `app/components/Base/Pagination.vue` - 一覧画面の共通ページネーション。
+- `app/components/Calendar/TimeColumnCalendar.vue` - 縦軸=時刻のカレンダー(シフト・スケジュールビューで流用)。
 
 ## 重要なコマンド
 
@@ -221,15 +285,21 @@ docker compose exec nuxt sh
 
 - [x] 技術選定・アーキテクチャ決定
 - [x] データモデル設計
-- [x] README.md / CLAUDE.md 整備
 - [x] **Phase 1 開発環境構築 完了**(Supabase 接続、Nuxt 雛形、Docker 化、Nuxt UI v4、Prisma 6、btree_gist)
-- [x] **Phase 2 データモデル構築 完了**(11 モデル、EXCLUDE / CHECK 制約、PublicHoliday、シードデータ)
+- [x] **Phase 2 データモデル構築 完了**(EXCLUDE / CHECK 制約、PublicHoliday、シードデータ)
 - [x] **Phase 3 お客様側予約フロー 完了**(店舗選択→メニュー→日時(時刻×曜日グリッド、◯/△/要TEL)→確認→完了、AES-256-GCM 暗号化、プライバシーポリシー)
 - [x] **Phase 4 管理画面の予約管理 完了**(一覧・検索・フィルタ・ページング、詳細・ステータス変更、手動予約作成、シフト日ビュー連動、ダッシュボード予約サマリ)
-- [ ] **Phase 5 本番準備**(次ここ。VPS + Supabase Pro 昇格 + Cloudflare R2 バックアップ + HTTPS)
+- [x] **Phase 5 会員機能 + 管理機能拡張 完了**
+  - 会員: 新規登録・メール認証・ログイン・マイページ・予約履歴・メアド/パス変更・退会
+  - 物販・回数券: 在庫管理・販売 / 消費・売上集計
+  - スタッフ管理 + 役職別権限テンプレート
+  - 顧客管理画面: 一覧(会員区分タブ・休眠フィルタ)、詳細(接客メモ・来店履歴・販売・回数券)
+  - 予約・販売管理画面: ステータスピル形タブ・ベッドフィルタ・スケジュールビュー(ベッド×時間軸)
+  - 物販クイック販売: ゲスト購入モード・複数商品カート式・顧客の部分一致検索
+- [ ] **Phase 6 本番デプロイ**(VPS + Supabase Pro 昇格 + Cloudflare R2 バックアップ + HTTPS + 2FA)
   - ⚠️ デプロイ時に **`NUXT_SESSION_COOKIE_SECURE=true`** を `.env` に必ず設定すること(dev では LAN IP HTTP 共有のため `nuxt.config.ts` で `false` に上書き中)
   - ⚠️ **`RESERVATION_ENCRYPTION_KEY`** はバックアップ必須(消失で過去顧客情報が永久に復号不能)
-  - 2FA(TOTP)実装も Phase 5 範囲
+  - 2FA(TOTP)実装も Phase 6 範囲
 
 ## 参考資料
 

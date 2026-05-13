@@ -63,11 +63,7 @@ const bedIdFilter = computed<number | null>({
   },
 })
 
-function pad(n: number): string { return String(n).padStart(2, '0') }
-function todayYmd(): string {
-  const d = new Date()
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-}
+// pad / todayYmd / fmtJstDateTime / fmtJstTime / yen は app/utils/format.ts の auto-import 経由で利用。
 
 const fromFilter = computed<string>({
   get() {
@@ -114,12 +110,12 @@ const pageNum = computed<number>({
 
 // ステータスタブ定義（ピル形）
 // 初期は「予約済（UPCOMING）」。完了/キャンセル/無断キャンセルは別タブで切り替える運用。
-const statusTabs: { v: string, label: string, icon: string }[] = [
-  { v: 'UPCOMING', label: '予約済', icon: 'i-lucide-calendar-clock' },
-  { v: 'COMPLETED', label: '完了', icon: 'i-lucide-circle-check' },
-  { v: 'NO_SHOW', label: '無断キャンセル', icon: 'i-lucide-user-x' },
-  { v: 'CANCELLED', label: 'キャンセル', icon: 'i-lucide-ban' },
-  { v: 'all', label: 'すべて', icon: 'i-lucide-list' },
+const statusTabs: { value: string, label: string, icon: string }[] = [
+  { value: 'UPCOMING', label: '予約済', icon: 'i-lucide-calendar-clock' },
+  { value: 'COMPLETED', label: '完了', icon: 'i-lucide-circle-check' },
+  { value: 'NO_SHOW', label: '無断キャンセル', icon: 'i-lucide-user-x' },
+  { value: 'CANCELLED', label: 'キャンセル', icon: 'i-lucide-ban' },
+  { value: 'all', label: 'すべて', icon: 'i-lucide-list' },
 ]
 
 // 検索入力（即時反映ではなくボタン押下で反映）
@@ -164,17 +160,6 @@ const { data, status, refresh } = await useFetch<ListResponse>('/api/admin/reser
 })
 
 // ── 表示ヘルパ ───────────────────────────────────────
-function fmtJstDateTime(iso: string): string {
-  const d = new Date(iso)
-  const jst = new Date(d.getTime() + 9 * 3600_000)
-  return `${jst.getUTCFullYear()}/${pad(jst.getUTCMonth() + 1)}/${pad(jst.getUTCDate())} ${pad(jst.getUTCHours())}:${pad(jst.getUTCMinutes())}`
-}
-function fmtJstTime(iso: string): string {
-  const d = new Date(iso)
-  const jst = new Date(d.getTime() + 9 * 3600_000)
-  return `${pad(jst.getUTCHours())}:${pad(jst.getUTCMinutes())}`
-}
-
 // 表示用ステータス: DB の status と endAt から自動判定（CONFIRMED + 終了済 = 完了）
 function statusBadge(r: Reservation): { label: string, class: string } {
   const s = displayStatus(r.status, r.endAt)
@@ -189,12 +174,6 @@ function statusBadge(r: Reservation): { label: string, class: string } {
 function clearFilters() {
   router.replace({ query: {} })
   qInput.value = ''
-}
-
-function goPage(p: number) {
-  if (p < 1) return
-  if (data.value && p > data.value.totalPages) return
-  pageNum.value = p
 }
 
 // 物販販売フォーム
@@ -230,8 +209,6 @@ async function onSaleAdded() {
   saleMode.value = false
   await Promise.all([refresh(), refreshStandaloneSales()])
 }
-
-function yen(n: number): string { return n.toLocaleString('ja-JP') }
 
 // ── ビュー切替（一覧 / スケジュール） ─────────────────
 type ViewMode = 'list' | 'schedule'
@@ -398,21 +375,7 @@ function goToday() { scheduleDate.value = todayYmd() }
     <!-- ========== 一覧ビュー ========== -->
     <template v-else>
     <!-- ステータスフィルタ（ピル形タブ・初期は「予約済」で件数を抑える） -->
-    <div class="mb-3 flex flex-wrap items-center gap-1.5">
-      <button
-        v-for="tab in statusTabs"
-        :key="tab.v"
-        type="button"
-        class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full border transition-colors"
-        :class="statusFilter === tab.v
-          ? 'bg-orange-500 text-white border-orange-500 shadow-sm'
-          : 'bg-white text-slate-700 border-slate-300 hover:border-orange-500 hover:bg-orange-50 hover:text-orange-700'"
-        @click="statusFilter = tab.v"
-      >
-        <UIcon :name="tab.icon" class="size-3.5" />
-        {{ tab.label }}
-      </button>
-    </div>
+    <BasePillTabs v-model="statusFilter" :items="statusTabs" class="mb-3" />
 
     <!-- 物販販売フォーム（インライン展開） -->
     <AdminReservationsQuickSale
@@ -591,27 +554,11 @@ function goToday() { scheduleDate.value = todayYmd() }
     </div>
 
     <!-- ページ送り下部 -->
-    <div v-if="data && data.totalPages > 1" class="mt-4 flex items-center justify-center gap-2">
-      <button
-        type="button"
-        class="px-3 py-1.5 text-sm rounded-sm border border-slate-300 bg-white hover:bg-slate-50 disabled:opacity-40"
-        :disabled="pageNum <= 1"
-        @click="goPage(pageNum - 1)"
-      >
-        ← 前
-      </button>
-      <span class="text-sm tabular-nums text-slate-700">
-        {{ pageNum }} / {{ data.totalPages }}
-      </span>
-      <button
-        type="button"
-        class="px-3 py-1.5 text-sm rounded-sm border border-slate-300 bg-white hover:bg-slate-50 disabled:opacity-40"
-        :disabled="pageNum >= data.totalPages"
-        @click="goPage(pageNum + 1)"
-      >
-        次 →
-      </button>
-    </div>
+    <BasePagination
+      v-if="data"
+      v-model:page="pageNum"
+      :total-pages="data.totalPages"
+    />
 
     <!-- 予約に紐付かない物販販売 -->
     <div v-if="hasPermission('sale:view') && (standaloneSales?.length ?? 0) > 0" class="mt-8">

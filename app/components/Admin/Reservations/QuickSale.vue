@@ -147,10 +147,10 @@ const validItemCount = computed(() =>
 )
 
 // ── 送信 ─────────────────────────────────────────────
+// yen は app/utils/format.ts の auto-import 経由で利用。
+
 const formError = ref<string | null>(null)
 const submitting = ref(false)
-
-function yen(n: number): string { return n.toLocaleString('ja-JP') }
 
 async function submit() {
   formError.value = null

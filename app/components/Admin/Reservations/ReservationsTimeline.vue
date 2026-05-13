@@ -81,19 +81,14 @@ const columns = computed<CalendarColumn[]>(() =>
     .map(b => ({ id: b.id, label: b.name })),
 )
 
-function pad(n: number): string { return String(n).padStart(2, '0') }
-function isoToHHMM(iso: string): string {
-  const d = new Date(iso)
-  const jst = new Date(d.getTime() + 9 * 3600_000)
-  return `${pad(jst.getUTCHours())}:${pad(jst.getUTCMinutes())}`
-}
+// fmtJstTime（JST の HH:MM 形式）は app/utils/format.ts の auto-import 経由。
 
 const ranges = computed<CalendarRange[]>(() =>
   visibleReservations.value.map(r => ({
     id: `reservation-${r.id}`,
     columnId: r.bed.id,
-    startTime: isoToHHMM(r.startAt),
-    endTime: isoToHHMM(r.endAt),
+    startTime: fmtJstTime(r.startAt),
+    endTime: fmtJstTime(r.endAt),
   })),
 )
 

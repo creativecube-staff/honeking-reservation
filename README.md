@@ -1,41 +1,61 @@
 # Honeking Reservation
 
-整骨院チェーン(10店舗)向けの予約管理システム。
+整骨院チェーン向けの予約管理システム。
 
-お客様はWeb上で「店舗→メニュー→日時→顧客情報」の4ステップで予約が完結。スタッフは管理画面でシフト・予約・メニューを管理。
+お客様はWeb上で「店舗→メニュー→日時→顧客情報」の4ステップで予約が完結。
+店舗スタッフは管理画面で予約・シフト・物販・顧客を一括管理。
 
 ## 参考イメージ
 
 <https://yoyaku.aigorit.com/>
 
-## 予約フロー(お客様側)
+## 主な機能
 
-1. **店舗選択** — 約10店舗から選択
-2. **メニュー選択** — 店舗ごとに個別のメニュー(骨盤矯正・マッサージ・鍼灸など)
-3. **日時選択** — カレンダー式で希望日時を選択
-4. **顧客情報入力・確認** — 氏名・電話番号などを入力して予約確定
+### お客様側
+
+- 4ステップの予約フロー（店舗 → メニュー → 日時 → 顧客情報・確認 → 完了）
+- 日時選択は時刻×曜日グリッド（◯/△/要TEL）で空き状況を可視化
+- 個人情報はAES-256-GCMでアプリ層暗号化
+- **会員機能**: メール認証付きの会員登録・ログイン・マイページ
+  - 予約履歴の閲覧
+  - 氏名・電話・メアド・パスワードの変更
+  - 退会（ゲスト顧客に格下げ、来店履歴は保持）
+
+### 管理画面
+
+- **予約・販売管理**
+  - 一覧ビュー: ステータスタブ（予約済/完了/無断キャンセル/キャンセル）、店舗・ベッド・日付・検索フィルタ
+  - スケジュールビュー: 店舗のベッド×時間軸ガントチャート（クリックで詳細遷移）
+  - 手動予約作成、ステータス変更、予約変更履歴
+- **物販・回数券販売**
+  - 予約に紐付ける販売 / 予約なしの店頭販売
+  - ゲスト購入モード（固定の「店頭ふらっと販売」顧客に集約）
+  - 複数商品カート式、顧客の部分一致検索
+- **顧客管理**
+  - 会員区分タブ（本会員/仮登録/休眠/ゲスト/退会済）
+  - 休眠顧客フィルタ（最終来店から N 日以上）
+  - 詳細画面で来店履歴・物販販売・保有回数券・接客メモを一覧
+- **シフト管理** (FullCalendar 風自作カレンダー、月/週/日/スタッフ別)
+- **店舗管理** (基本情報・ベッド・特別メニュー・営業時間・店休日をタブで集約)
+- **スタッフ管理** (役職テンプレート + 個別 permission overrides で権限制御)
+- **メニュー・商品・売上管理**
 
 ## 技術スタック
 
 | 領域 | 採用技術 |
 |---|---|
-| フレームワーク | Nuxt 4 (TypeScript) |
-| UI | Nuxt UI + Tailwind CSS |
-| ORM | Prisma |
-| DB(開発・本番とも) | Supabase PostgreSQL(東京リージョン) |
-| カレンダー(客側) | v-calendar |
-| カレンダー(管理) | FullCalendar(Resource Timeline) |
-| 認証(管理画面) | nuxt-auth-utils |
-| バリデーション | VeeValidate + Zod |
-| 実行環境(開発) | Docker Compose（ローカル）|
-| 実行環境(本番) | Docker Compose on VPS |
-| デプロイ先 | VPS(Xserver VPS / さくらVPS) |
-
-## 前提ツール
-
-- Node.js 20+
-- Supabaseアカウント（無料）
-- Git
+| フレームワーク | Nuxt 4.4 (TypeScript) |
+| UI | Nuxt UI v4 + Tailwind CSS v4 |
+| ORM | Prisma 6.19 |
+| DB（開発・本番とも） | Supabase PostgreSQL（東京リージョン） |
+| カレンダー（客側） | v-calendar |
+| カレンダー（管理） | 自作 TimeColumnCalendar（縦軸=時刻、横軸=スタッフ/ベッド） |
+| 認証（管理画面） | nuxt-auth-utils + 2FA TOTP（Phase 6 で導入予定） |
+| 認証（会員） | nuxt-auth-utils + メール認証 |
+| バリデーション | Zod |
+| メール送信 | Resend |
+| 実行環境（開発） | Docker Compose（ローカル） |
+| 実行環境（本番） | Docker Compose on VPS |
 
 ## セットアップ
 
@@ -44,109 +64,134 @@
 git clone <このリポジトリ>
 cd honeking-reservation
 
-# 2. 依存インストール
-npm install
-
-# 3. Supabase でプロジェクト作成（無料）
+# 2. Supabase でプロジェクト作成（無料）
 #    ダッシュボードから DATABASE_URL / DIRECT_URL を取得しておく
 
-# 4. 環境変数
+# 3. 環境変数
 cp .env.example .env
-# .env を編集（Supabase 接続情報を貼り付け）
+# .env を編集：
+#   - DATABASE_URL / DIRECT_URL（Supabase）
+#   - RESERVATION_ENCRYPTION_KEY（`openssl rand -base64 32` で生成、本番ではバックアップ必須）
+#   - NUXT_SESSION_PASSWORD（`openssl rand -base64 48` で生成）
+#   - RESEND_API_KEY（会員メール認証で必要）
+
+# 4. 開発サーバー起動（バックグラウンド）
+docker compose up -d
 
 # 5. DBマイグレーション & 初期データ投入
-npx prisma migrate dev
-npx prisma db seed
+docker compose exec nuxt npx prisma migrate dev
+docker compose exec nuxt npx prisma db seed
 
-# 6. 開発サーバー起動
-npm run dev
 # → http://localhost:3000
 ```
 
 ## 開発コマンド
 
 ```bash
-# 開発サーバー起動（Supabase 直結）
-npm run dev
+# 起動 / 停止
+docker compose up -d
+docker compose down
 
-# Prisma Studio（DB GUI）
-npx prisma studio
-# → http://localhost:5555
+# .env を編集したら必須（restart では env_file が再ロードされない）
+docker compose up -d --force-recreate
 
-# マイグレーション作成
-npx prisma migrate dev --name <変更名>
+# ログ追跡
+docker compose logs -f nuxt
 
-# 型再生成
-npx prisma generate
+# Prisma
+docker compose exec nuxt npx prisma migrate dev --name <変更名>
+docker compose exec nuxt npx prisma generate
+docker compose exec nuxt npx prisma db seed
 
-# シード再投入
-npx prisma db seed
+# パッケージ追加
+docker compose exec nuxt npm install <package>
+
+# コンテナ内シェル
+docker compose exec nuxt sh
 ```
 
-## ディレクトリ構成(予定)
+ホスト側で直接 `npm run dev` は実行しない。すべてコンテナ内で動かす。
 
-開発フェーズはローカルNuxtからSupabaseへ直結する構成。
-Docker関連ファイルは本番デプロイ直前に追加する。
+## ディレクトリ構成
 
 ```
 .
-├─ .env.example
+├─ docker-compose.yml
 ├─ nuxt.config.ts
 ├─ prisma/
 │   ├─ schema.prisma
 │   ├─ migrations/
-│   └─ seed.ts
+│   └─ seed.mjs
 ├─ app/
-│   ├─ pages/                  # お客様側画面
-│   │   ├─ index.vue           # 店舗選択
-│   │   └─ stores/[id]/
-│   │       ├─ menu.vue
-│   │       ├─ calendar.vue
-│   │       └─ confirm.vue
-│   ├─ pages/admin/            # 管理画面
-│   │   ├─ login.vue
-│   │   ├─ dashboard.vue
-│   │   ├─ schedule.vue
-│   │   └─ reservations.vue
+│   ├─ pages/
+│   │   ├─ index.vue                      # 店舗選択
+│   │   ├─ reserve/                       # 予約フロー
+│   │   ├─ signup.vue / login.vue         # 会員登録・ログイン
+│   │   ├─ me/                            # 会員マイページ
+│   │   └─ admin/                         # 管理画面
+│   │       ├─ reservations/              # 予約・販売管理（一覧⇄スケジュール）
+│   │       ├─ customers/                 # 顧客管理
+│   │       ├─ shifts/ stores/ staff/ menus/ products/ sales/
 │   ├─ components/
-│   └─ composables/
+│   │   ├─ Base/                          # 汎用（PillTabs, Pagination）
+│   │   ├─ Calendar/                      # 縦軸=時刻のカレンダー
+│   │   └─ Admin/                         # 管理画面用
+│   ├─ layouts/                           # default / admin
+│   ├─ middleware/                        # 認証ガード
+│   └─ utils/format.ts                    # JST フォーマッタ + 円表記
 ├─ server/
-│   └─ api/
-│       ├─ stores.get.ts
-│       ├─ menus/[storeId].get.ts
-│       ├─ availability.post.ts
-│       └─ reservations.post.ts
-└─ docker/                     # 本番デプロイ直前に追加
-    ├─ Dockerfile
-    └─ docker-compose.prod.yml
+│   ├─ api/
+│   │   ├─ admin/                         # 管理 API（権限ガード）
+│   │   ├─ member/                        # 会員 API（自分自身のみ）
+│   │   └─ availability.get.ts            # 公開 API
+│   └─ utils/                             # crypto, hash, mail, prisma, etc.
+└─ shared/
+    ├─ permissions.ts                     # 権限定義
+    ├─ membership.ts                      # 会員区分判定
+    ├─ reservationStatus.ts               # 予約ステータス表示ロジック
+    └─ schemas/                           # Zod スキーマ
 ```
 
 ## データモデル概要
 
 主要エンティティ:
 
-- **Store** — 店舗(10店舗)
-- **Bed** — 施術ベッド(店舗ごとに3〜4台)
-- **Practitioner** — 施術者(店舗固定)
-- **Menu** — メニュー(店舗ごとに個別)
-- **BusinessHour** — 曜日別営業時間・休憩時間(固定)
-- **Holiday** — 休業日
-- **Shift** — 施術者のシフト
-- **Customer** — 顧客
-- **Reservation** — 予約(`storeId` + `bedId` + `practitionerId` + `menuId` + 時間帯)
+- **Store** — 店舗マスタ
+- **Bed** — 施術ベッド（店舗ごとに3〜4台）
+- **Practitioner** — スタッフ（施術者・受付・店長）。予約割当可否とログイン可否を分離
+- **Menu** — メニュー（共通メニュー + 店舗特別メニューの2階建て）
+- **BusinessHour** / **Holiday** / **Closure** / **PublicHoliday** — 営業時間・休業
+- **Shift** — 施術者シフト（ヘルプ先店舗指定可）
+- **Customer** — 顧客（個人情報はAES-256-GCM暗号化、検索は `*Hash`カラム）
+  - 会員機能、退会日時、管理者用接客メモを保持
+- **Reservation** — 予約 + **ReservationHistory** — 変更履歴
+- **Product** / **ProductSale** — 商品マスタ + 販売記録（物販・回数券）
+- **CustomerVoucher** / **VoucherUsage** — 回数券保有・消費
 
-予約の重複は **PostgreSQL `EXCLUDE` 制約** でDBレベルで防止。
+予約の重複は **PostgreSQL `EXCLUDE` 制約**でDBレベル防止（同じベッド・施術者の時間重複を不可能にする）。
+
+## セキュリティ方針（法人運用）
+
+- HTTPS強制（Let's Encrypt自動更新）
+- 管理画面: IP制限 + 2FA TOTP（Phase 6 で導入）
+- 個人情報（氏名・電話・メール）はアプリ層で**AES-256-GCM暗号化**
+- 検索は**SHA-256ハッシュ**で行い、暗号化値を復号せず比較
+- Supabase接続情報・暗号化キーは`.env`のみで管理、Gitに含めない
+- サービスロールキーはサーバー側のみで使用、クライアントに露出させない
+- バックアップ: Supabase自動バックアップ + Cloudflare R2 オフサイト
+- SSH鍵認証のみ、UFW + fail2ban
+- プライバシーポリシー・利用規約は公開前に整備
 
 ## リリース計画
 
 | フェーズ | 環境 | 月額 |
 |---|---|---|
-| Phase 1: 開発 | ローカルNuxt + Supabase Free | 0円 |
-| Phase 2: ステージング | （将来検討・いったんスキップ） | — |
-| Phase 3: 本番 | VPS + Docker Compose + Supabase Pro | 約5,500円 |
+| Stage 1: 開発（現在） | ローカル Docker Compose + Supabase Free | 0円 |
+| Stage 2: ステージング | （いったんスキップ） | — |
+| Stage 3: 本番 | VPS + Docker Compose + Supabase Pro | 約5,500円 |
 
-Supabase Freeは1週間アクセスがないと一時停止するが、開発中は管理画面からの再開で問題なし。
-本番リリース時はSupabase Proに昇格（管理画面でボタン1つ、データ移行不要）。
+Supabase Freeは1週間アクセスがないと一時停止するため、本番はSupabase Pro必須。
+開発中は管理画面から数分で復帰できるため許容。
 
 ## 本番運用の構成
 
@@ -169,20 +214,12 @@ Supabase Freeは1週間アクセスがないと一時停止するが、開発中
                            ▼                  ▼
                   [ Supabase Pro ]    [ Cloudflare R2 ]
                   （PostgreSQL）      （バックアップ）
-                  ・東京リージョン     ・10GB まで無料
+                  ・東京リージョン     ・10GBまで無料
                   ・自動バックアップ   ・暗号化保管
                   ・PITR 7日間保持
 ```
 
-役割:
-
-- **VPS**: Nuxt アプリ本体を Docker で実行。HTTPS 終端も担当
-- **Supabase Pro**: マネージド PostgreSQL。バックアップ・冗長化込み
-- **Cloudflare**: DNS（無料）と前段 CDN。DDoS 緩和も自動
-- **Cloudflare R2**: Supabase 自動バックアップとは別に、自前で取った dump を保管（10GB まで無料）
-- **Let's Encrypt**: HTTPS 証明書を自動更新（無料）
-
-## 月額運用費の内訳
+## 月額運用費
 
 ### 最小構成（公開直後）
 
@@ -195,78 +232,34 @@ Supabase Freeは1週間アクセスがないと一時停止するが、開発中
 | オフサイトバックアップ | Cloudflare R2（10GB まで無料） | ¥0 |
 | DNS / DDoS 対策 | Cloudflare 無料プラン | ¥0 |
 | 稼働監視 | UptimeRobot 無料 | ¥0 |
+| メール送信 | Resend（月3,000通まで無料） | ¥0 |
 | **合計** | | **約 ¥5,000 〜 5,500/月** |
 
 ### 標準構成（推奨）
 
-- VPS を 2GB プランに変更（Docker + Node + Vite で 1GB はギリギリ）
-- → **約 ¥6,000 〜 6,500/月**
-
-### オプション
-
-| 項目 | 月額目安 | 補足 |
-|---|---:|---|
-| 予約完了メール | ¥0 | Resend 月3,000通まで無料、整骨院規模なら余裕 |
-| 予約確認 SMS | ¥1,000 〜 3,000 | Twilio 等。SMS は意外と高い |
-| エラー監視（Sentry） | ¥0 | 月5,000 errors まで無料 |
+VPSを2GBプランに変更（Docker + Node + Vite で1GBはギリギリ）
+→ **約 ¥6,000 〜 6,500/月**
 
 ### Supabase は Free ではなく Pro が必要な理由
 
-| | Free | Pro |
+|  | Free | Pro |
 |---|---|---|
 | DB 容量 | 500MB | 8GB |
 | **一時停止** | **1週間アクセスなしで停止** | **常時稼働** |
 | バックアップ保持 | なし | 7日間 PITR |
 | 同時接続 | 60 | 200 |
 
-「一時停止」が致命的なので本番では Pro 必須。
+「一時停止」が致命的なので本番ではPro必須。
 
-## なぜ AWS ではなく VPS + Supabase か
+## 開発フェーズの進捗
 
-| 観点 | VPS + Supabase | AWS フル構成 |
-|---|---|---|
-| 月額 | ¥5,500〜 予測可能 | ¥10,000〜30,000+ 月末まで読めない |
-| 帯域料金 | 込み | アウトバウンド $0.114/GB、地味に効く |
-| 運用負荷 | sshd / certbot / docker compose | VPC / SG / IAM / Route53 / ALB / ACM / ECS / RDS …（一人で見るのは厳しい） |
-| トラブル時 | ググるとほぼ全部解決例あり | AWS 固有の罠が多い |
-
-AWS の強み（オートスケール・グローバル展開）は整骨院チェーン規模（2〜10 店舗、月数千〜数万予約）では発揮されない。
-Docker 化してあるので、必要になれば AWS / GCP / Azure へ後から移行可能。
-
-## 落ちないようにするレベル別の選択肢
-
-| レベル | 構成 | 月額追加 | 復旧時間 |
-|---|---|---:|---|
-| 0. 何もしない | VPS 1 台 | ¥0 | VPS 障害時は復旧待ち |
-| **1. 自動再起動 + 監視（最低限）** | docker `restart: always` + UptimeRobot | ¥0 | アプリクラッシュは秒で復活 |
-| **2. Cloudflare 前段（推奨）** | 上記 + Cloudflare 無料プラン | ¥0 | DDoS 対策、障害時の静的キャッシュ表示 |
-| 3. VPS 2台 + DNS フェイルオーバー | VPS×2 + Cloudflare health check | +¥1,500 〜 2,000 | 自動切替（1〜2分） |
-| 4. 本格 LB 構成 | VPS×2 + Cloudflare Load Balancer | +¥3,000 〜 5,000 | 自動切替（数秒） |
-
-整骨院規模では **レベル 1 + 2 で十分**。
-理由: VPS の SLA が 99.99%（年間ダウンタイム約 52 分）あり、DB は Supabase Pro が冗長化してくれているため、業務影響のあるダウンタイムはほぼ発生しない想定。
-
-## スケーリング時の対応
-
-| トリガー | 対応 | コスト増 |
-|---|---|---:|
-| DB 8GB 超（数十万件の予約） | Supabase Team プラン or 自前 PostgreSQL に移行 | +¥10,000 程度 |
-| 同時接続 200 超 | VPS スペック upgrade（4GB） | +¥1,500 |
-| ピーク時の重さ | Cloudflare Pro で CDN 強化 | +¥3,000 |
-
-整骨院 5〜10 店舗規模なら、**数年は ¥5,500 構成のまま** 持つ想定。
-
-## セキュリティ方針(法人運用)
-
-- HTTPS強制(Let's Encrypt)
-- 管理画面: IP制限 + 2FA
-- Supabase接続情報（DB URL / API key）は`.env`のみで管理し、Gitに含めない
-- サービスロールキーはサーバー側のみで使用、クライアントに露出させない
-- 個人情報(電話番号・メール)はアプリ層でAES-256-GCM暗号化
-- バックアップはSupabase自動バックアップと暗号化オフサイト（Cloudflare R2）
-- SSH鍵認証のみ、UFW + fail2ban
-- プライバシーポリシー・利用規約は公開前に整備
+- [x] Phase 1: 開発環境構築（Supabase接続、Nuxt雛形、Docker化、btree_gist）
+- [x] Phase 2: データモデル構築（EXCLUDE/CHECK制約、シードデータ）
+- [x] Phase 3: お客様側予約フロー（4ステップ予約・AES暗号化・プライバシーポリシー）
+- [x] Phase 4: 管理画面の予約管理（一覧・詳細・手動作成・シフト連動）
+- [x] Phase 5: 会員機能 + 管理機能拡張（会員マイページ・顧客管理・物販販売・スケジュールビュー）
+- [ ] Phase 6: 本番デプロイ（VPS + Supabase Pro + Cloudflare R2 + HTTPS + 2FA）
 
 ## ライセンス
 
-Proprietary(社内利用)
+Proprietary（社内利用）

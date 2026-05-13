@@ -1,13 +1,16 @@
 <script setup lang="ts">
+import { MEMBERSHIP_BADGE, type Membership } from '~~/shared/membership'
+
 definePageMeta({ layout: 'admin', requirePermission: 'customer:view' })
 
-type Membership = 'member' | 'pending' | 'guest' | 'dormant' | 'withdrawn'
+// 一覧データ自体は dormant 区別を持たない（dormant はフィルタ手段でしかない）
+type ListMembership = Membership | 'dormant' | 'all'
 type Customer = {
   id: number
   name: string | null
   phone: string | null
   email: string | null
-  membership: Exclude<Membership, 'dormant'> // 一覧データ自体は dormant 区別を持たない
+  membership: Membership
   withdrawnAt: string | null
   lastLoginAt: string | null
   createdAt: string
@@ -27,12 +30,11 @@ const route = useRoute()
 const router = useRouter()
 
 // ── URL クエリ <-> state ─────────────────────────────
-const membershipFilter = computed<Membership | 'all'>({
+const ALL_TABS = ['all', 'member', 'pending', 'guest', 'dormant', 'withdrawn'] as const
+const membershipFilter = computed<ListMembership>({
   get() {
     const v = String(route.query.membership ?? 'all')
-    return (['all', 'member', 'pending', 'guest', 'dormant', 'withdrawn'] as const).includes(v as Membership | 'all')
-      ? (v as Membership | 'all')
-      : 'all'
+    return (ALL_TABS as readonly string[]).includes(v) ? (v as ListMembership) : 'all'
   },
   set(v) {
     router.replace({ query: { ...route.query, membership: v === 'all' ? undefined : v, page: undefined } })
@@ -114,45 +116,21 @@ const { data, status, refresh } = await useFetch<ListResponse>('/api/admin/custo
 })
 
 // ── 表示ヘルパ ───────────────────────────────────────
-function pad(n: number): string { return String(n).padStart(2, '0') }
-function fmtJstDate(iso: string | null): string {
-  if (!iso) return '—'
-  const d = new Date(iso)
-  const jst = new Date(d.getTime() + 9 * 3600_000)
-  return `${jst.getUTCFullYear()}/${pad(jst.getUTCMonth() + 1)}/${pad(jst.getUTCDate())}`
-}
-function fmtJstDateTime(iso: string | null): string {
-  if (!iso) return '—'
-  const d = new Date(iso)
-  const jst = new Date(d.getTime() + 9 * 3600_000)
-  return `${jst.getUTCFullYear()}/${pad(jst.getUTCMonth() + 1)}/${pad(jst.getUTCDate())} ${pad(jst.getUTCHours())}:${pad(jst.getUTCMinutes())}`
-}
+// fmtJstDate / fmtJstDateTime は app/utils/format.ts の auto-import 経由で利用。
+// メンバーシップバッジ表記は shared/membership.ts の MEMBERSHIP_BADGE を流用。
 
-function membershipBadge(c: Customer): { label: string, class: string } {
-  if (c.membership === 'withdrawn') return { label: '退会済', class: 'bg-slate-200 text-slate-600 border-slate-400' }
-  if (c.membership === 'member') return { label: '本会員', class: 'bg-green-100 text-green-800 border-green-300' }
-  if (c.membership === 'pending') return { label: '仮登録', class: 'bg-amber-100 text-amber-800 border-amber-300' }
-  return { label: 'ゲスト', class: 'bg-slate-100 text-slate-700 border-slate-300' }
-}
-
-const tabs: { v: Membership | 'all', label: string }[] = [
-  { v: 'all', label: 'すべて' },
-  { v: 'member', label: '本会員' },
-  { v: 'pending', label: '仮登録' },
-  { v: 'dormant', label: '休眠' },
-  { v: 'guest', label: 'ゲストのみ' },
-  { v: 'withdrawn', label: '退会済' },
+const tabs: { value: ListMembership, label: string, icon: string }[] = [
+  { value: 'all', label: 'すべて', icon: 'i-lucide-users' },
+  { value: 'member', label: '本会員', icon: 'i-lucide-badge-check' },
+  { value: 'pending', label: '仮登録', icon: 'i-lucide-mail-question' },
+  { value: 'dormant', label: '休眠', icon: 'i-lucide-clock-alert' },
+  { value: 'guest', label: 'ゲストのみ', icon: 'i-lucide-user' },
+  { value: 'withdrawn', label: '退会済', icon: 'i-lucide-user-x' },
 ]
 
 function clearFilters() {
   router.replace({ query: {} })
   qInput.value = ''
-}
-
-function goPage(p: number) {
-  if (p < 1) return
-  if (data.value && p > data.value.totalPages) return
-  pageNum.value = p
 }
 </script>
 
@@ -168,50 +146,7 @@ function goPage(p: number) {
     </p>
 
     <!-- 会員区分フィルタ（ピル形ボタン） -->
-    <div class="mb-3 flex flex-wrap items-center gap-1.5">
-      <button
-        v-for="tab in tabs"
-        :key="tab.v"
-        type="button"
-        class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full border transition-colors"
-        :class="membershipFilter === tab.v
-          ? 'bg-orange-500 text-white border-orange-500 shadow-sm'
-          : 'bg-white text-slate-700 border-slate-300 hover:border-orange-500 hover:bg-orange-50 hover:text-orange-700'"
-        @click="membershipFilter = tab.v"
-      >
-        <UIcon
-          v-if="tab.v === 'all'"
-          name="i-lucide-users"
-          class="size-3.5"
-        />
-        <UIcon
-          v-else-if="tab.v === 'member'"
-          name="i-lucide-badge-check"
-          class="size-3.5"
-        />
-        <UIcon
-          v-else-if="tab.v === 'pending'"
-          name="i-lucide-mail-question"
-          class="size-3.5"
-        />
-        <UIcon
-          v-else-if="tab.v === 'dormant'"
-          name="i-lucide-clock-alert"
-          class="size-3.5"
-        />
-        <UIcon
-          v-else-if="tab.v === 'guest'"
-          name="i-lucide-user"
-          class="size-3.5"
-        />
-        <UIcon
-          v-else-if="tab.v === 'withdrawn'"
-          name="i-lucide-user-x"
-          class="size-3.5"
-        />
-        {{ tab.label }}
-      </button>
-    </div>
+    <BasePillTabs v-model="membershipFilter" :items="tabs" class="mb-3" />
 
     <!-- 休眠タブ選択時のみ閾値入力 -->
     <div v-if="membershipFilter === 'dormant'" class="mb-3 flex items-center gap-2 text-sm bg-amber-50 border border-amber-200 rounded-sm p-2.5">
@@ -368,8 +303,8 @@ function goPage(p: number) {
               </div>
             </td>
             <td class="px-3 py-2">
-              <span class="inline-block px-2 py-0.5 text-xs font-semibold rounded border" :class="membershipBadge(c).class">
-                {{ membershipBadge(c).label }}
+              <span class="inline-block px-2 py-0.5 text-xs font-semibold rounded border" :class="MEMBERSHIP_BADGE[c.membership].class">
+                {{ MEMBERSHIP_BADGE[c.membership].label }}
               </span>
             </td>
             <td class="px-3 py-2 text-right tabular-nums">
@@ -397,26 +332,10 @@ function goPage(p: number) {
     </div>
 
     <!-- ページ送り下部 -->
-    <div v-if="data && data.totalPages > 1" class="mt-4 flex items-center justify-center gap-2">
-      <button
-        type="button"
-        class="px-3 py-1.5 text-sm rounded-sm border border-slate-300 bg-white hover:bg-slate-50 disabled:opacity-40"
-        :disabled="pageNum <= 1"
-        @click="goPage(pageNum - 1)"
-      >
-        ← 前
-      </button>
-      <span class="text-sm tabular-nums text-slate-700">
-        {{ pageNum }} / {{ data.totalPages }}
-      </span>
-      <button
-        type="button"
-        class="px-3 py-1.5 text-sm rounded-sm border border-slate-300 bg-white hover:bg-slate-50 disabled:opacity-40"
-        :disabled="pageNum >= data.totalPages"
-        @click="goPage(pageNum + 1)"
-      >
-        次 →
-      </button>
-    </div>
+    <BasePagination
+      v-if="data"
+      v-model:page="pageNum"
+      :total-pages="data.totalPages"
+    />
   </div>
 </template>

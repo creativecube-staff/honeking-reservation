@@ -11,7 +11,9 @@ const { user, fetch: fetchSession, clear: clearSession } = useUserSession()
 // - スタッフ管理: 全店舗のスタッフを横断管理（メイン店舗で絞り込み）。ログイン情報・役職もここで設定
 // - メニュー管理: 共通メニュー（全店舗で利用可能）の管理。店舗ごとの特別メニューは店舗詳細から
 // - シフト管理: 日付別、出勤時刻 + workStoreId（人手不足時のヘルプ先指定）
-const allNavItems: ReadonlyArray<{ icon: string, label: string, to: string, permission: Permission }> = [
+// 各項目に必要 permission を紐付けてユーザーの permissions でフィルタする。
+// permission が null の項目（ヘルプ等）は全員に表示する。
+const allNavItems: ReadonlyArray<{ icon: string, label: string, to: string, permission: Permission | null }> = [
   { icon: 'i-lucide-home', label: 'ダッシュボード', to: '/admin', permission: 'dashboard:view' },
   { icon: 'i-lucide-calendar-check', label: '予約・販売管理', to: '/admin/reservations', permission: 'reservation:view' },
   { icon: 'i-lucide-users', label: '顧客管理', to: '/admin/customers', permission: 'customer:view' },
@@ -21,11 +23,12 @@ const allNavItems: ReadonlyArray<{ icon: string, label: string, to: string, perm
   { icon: 'i-lucide-clipboard-list', label: 'メニュー管理', to: '/admin/menus', permission: 'menu:view' },
   { icon: 'i-lucide-package', label: '商品管理', to: '/admin/products', permission: 'product:view' },
   { icon: 'i-lucide-trending-up', label: '売上管理', to: '/admin/sales', permission: 'sale:view' },
+  { icon: 'i-lucide-circle-help', label: 'ヘルプ', to: '/admin/help', permission: null },
 ]
 
 const navItems = computed(() => {
   const perms = user.value?.permissions ?? []
-  return allNavItems.filter(item => perms.includes(item.permission))
+  return allNavItems.filter(item => item.permission === null || perms.includes(item.permission))
 })
 
 const userRoleLabel = computed(() => {

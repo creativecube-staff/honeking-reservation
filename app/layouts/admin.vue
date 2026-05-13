@@ -14,6 +14,7 @@ const { user, fetch: fetchSession, clear: clearSession } = useUserSession()
 const allNavItems: ReadonlyArray<{ icon: string, label: string, to: string, permission: Permission }> = [
   { icon: 'i-lucide-home', label: 'ダッシュボード', to: '/admin', permission: 'dashboard:view' },
   { icon: 'i-lucide-calendar-check', label: '予約・販売管理', to: '/admin/reservations', permission: 'reservation:view' },
+  { icon: 'i-lucide-users', label: '顧客管理', to: '/admin/customers', permission: 'customer:view' },
   { icon: 'i-lucide-calendar-clock', label: 'シフト管理', to: '/admin/shifts', permission: 'shift:view' },
   { icon: 'i-lucide-building-2', label: '店舗管理', to: '/admin/stores', permission: 'store:view' },
   { icon: 'i-lucide-user-round', label: 'スタッフ管理', to: '/admin/staff', permission: 'staff:view' },

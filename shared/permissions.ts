@@ -21,6 +21,8 @@ export const ALL_PERMISSIONS = [
   'product:edit',
   'sale:view',
   'sale:edit',
+  'customer:view',
+  'customer:edit',
 ] as const
 
 export type Permission = (typeof ALL_PERMISSIONS)[number]
@@ -43,7 +45,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<RoleName, Permission[]> = {
   OWNER: [...ALL_PERMISSIONS],
   // 店長: ユーザー管理含む全権限（オーナーと同等の運用）
   MANAGER: [...ALL_PERMISSIONS],
-  // 受付: 予約管理中心 + シフト閲覧 + 物販・回数券販売
+  // 受付: 予約管理中心 + シフト閲覧 + 物販・回数券販売 + 顧客閲覧
   RECEPTIONIST: [
     'dashboard:view',
     'reservation:view',
@@ -55,6 +57,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<RoleName, Permission[]> = {
     'product:view',
     'sale:view',
     'sale:edit',
+    'customer:view',
   ],
   // 施術者: 自分の状況確認中心 + 物販・回数券販売
   PRACTITIONER: [
@@ -97,4 +100,6 @@ export const PERMISSION_LABEL: Record<Permission, string> = {
   'product:edit': '商品マスタ管理（在庫・価格・回数券設定）',
   'sale:view': '販売履歴閲覧',
   'sale:edit': '販売登録・回数券消費',
+  'customer:view': '顧客閲覧（会員情報・来店履歴の閲覧）',
+  'customer:edit': '顧客編集（会員情報の編集）',
 }

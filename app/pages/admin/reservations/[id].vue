@@ -562,7 +562,13 @@ void ROLE_LABEL
             <div>
               <dt class="text-xs text-slate-500">お名前</dt>
               <dd class="text-base font-semibold text-slate-900">
-                {{ reservation.customer.name ?? '(復号できませんでした)' }}
+                <NuxtLink
+                  :to="`/admin/customers/${reservation.customer.id}`"
+                  class="text-blue-700 hover:text-blue-900 hover:underline inline-flex items-center gap-1.5"
+                >
+                  {{ reservation.customer.name ?? '(復号できませんでした)' }}
+                  <UIcon name="i-lucide-external-link" class="size-3.5 opacity-60" />
+                </NuxtLink>
               </dd>
             </div>
             <div v-if="reservation.customer.phone">

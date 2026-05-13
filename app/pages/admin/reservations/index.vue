@@ -39,13 +39,27 @@ const storeIdFilter = computed<number | null>({
   },
 })
 
+// ステータスフィルタは表示ステータス（UPCOMING / COMPLETED / NO_SHOW / CANCELLED / '' = すべて）
+// 初期値は「UPCOMING（予約済）」: 未来の予約だけ表示することで、件数が増えても普段使いがコンパクトに保てる
 const statusFilter = computed<string>({
   get() {
-    const q = String(route.query.status ?? '')
-    return ['CONFIRMED', 'CANCELLED', 'NO_SHOW'].includes(q) ? q : ''
+    const q = String(route.query.status ?? 'UPCOMING')
+    return ['UPCOMING', 'COMPLETED', 'NO_SHOW', 'CANCELLED', 'all'].includes(q) ? q : 'UPCOMING'
   },
   set(v) {
-    router.replace({ query: { ...route.query, status: v || undefined, page: undefined } })
+    // 'all' は URL に載せず、デフォルト UPCOMING との区別のために 'all' を残す
+    router.replace({ query: { ...route.query, status: v === 'UPCOMING' ? undefined : v, page: undefined } })
+  },
+})
+
+// ベッド絞り込み（店舗選択時のみ意味あり）
+const bedIdFilter = computed<number | null>({
+  get() {
+    const q = Number(route.query.bedId)
+    return Number.isInteger(q) && q > 0 ? q : null
+  },
+  set(v) {
+    router.replace({ query: { ...route.query, bedId: v == null ? undefined : String(v), page: undefined } })
   },
 })
 
@@ -57,11 +71,15 @@ function todayYmd(): string {
 
 const fromFilter = computed<string>({
   get() {
+    // URL に from パラメータが「無い」ときは今日をデフォルトとして使う。
+    // 入力欄を手動で空にすると ?from= が URL に載り、クリアされたとみなして空欄になる。
+    // 「条件クリア」ボタンは全クエリを消すので、結果としてデフォルト（今日）に戻る。
+    if (!('from' in route.query)) return todayYmd()
     const q = String(route.query.from ?? '')
     return /^\d{4}-\d{2}-\d{2}$/.test(q) ? q : ''
   },
   set(v) {
-    router.replace({ query: { ...route.query, from: v || undefined, page: undefined } })
+    router.replace({ query: { ...route.query, from: v ?? '', page: undefined } })
   },
 })
 
@@ -94,6 +112,16 @@ const pageNum = computed<number>({
   },
 })
 
+// ステータスタブ定義（ピル形）
+// 初期は「予約済（UPCOMING）」。完了/キャンセル/無断キャンセルは別タブで切り替える運用。
+const statusTabs: { v: string, label: string, icon: string }[] = [
+  { v: 'UPCOMING', label: '予約済', icon: 'i-lucide-calendar-clock' },
+  { v: 'COMPLETED', label: '完了', icon: 'i-lucide-circle-check' },
+  { v: 'NO_SHOW', label: '無断キャンセル', icon: 'i-lucide-user-x' },
+  { v: 'CANCELLED', label: 'キャンセル', icon: 'i-lucide-ban' },
+  { v: 'all', label: 'すべて', icon: 'i-lucide-list' },
+]
+
 // 検索入力（即時反映ではなくボタン押下で反映）
 const qInput = ref(qFilter.value)
 watch(qFilter, v => { qInput.value = v })
@@ -107,17 +135,32 @@ const { data: stores } = await useFetch<Store[]>('/api/admin/stores', {
   query: { status: 'active' },
 })
 
+// 店舗選択時のみ、その店舗のベッド一覧を取得（ベッド絞り込みプルダウン用）
+type Bed = { id: number, name: string, displayOrder: number, isActive: boolean }
+const { data: beds } = await useFetch<Bed[]>(() =>
+  storeIdFilter.value ? `/api/admin/stores/${storeIdFilter.value}/beds` : '',
+{
+  default: () => [] as Bed[],
+  watch: [storeIdFilter],
+})
+
+// 店舗を変更したらベッド絞り込みをリセット
+watch(storeIdFilter, () => {
+  if (bedIdFilter.value != null) bedIdFilter.value = null
+})
+
 const { data, status, refresh } = await useFetch<ListResponse>('/api/admin/reservations', {
   query: computed(() => ({
     storeId: storeIdFilter.value ?? undefined,
-    status: statusFilter.value || undefined,
+    bedId: bedIdFilter.value ?? undefined,
+    status: statusFilter.value === 'all' ? undefined : statusFilter.value,
     from: fromFilter.value || undefined,
     to: toFilter.value || undefined,
     q: qFilter.value || undefined,
     page: pageNum.value,
     pageSize: 50,
   })),
-  watch: [storeIdFilter, statusFilter, fromFilter, toFilter, qFilter, pageNum],
+  watch: [storeIdFilter, bedIdFilter, statusFilter, fromFilter, toFilter, qFilter, pageNum],
 })
 
 // ── 表示ヘルパ ───────────────────────────────────────
@@ -189,6 +232,37 @@ async function onSaleAdded() {
 }
 
 function yen(n: number): string { return n.toLocaleString('ja-JP') }
+
+// ── ビュー切替（一覧 / スケジュール） ─────────────────
+type ViewMode = 'list' | 'schedule'
+const viewMode = computed<ViewMode>({
+  get() {
+    return route.query.view === 'schedule' ? 'schedule' : 'list'
+  },
+  set(v) {
+    router.replace({ query: { ...route.query, view: v === 'list' ? undefined : v, page: undefined } })
+  },
+})
+
+// スケジュールビューの「対象日」: fromFilter を流用（既存の開始日入力）
+const scheduleDate = computed<string>({
+  get() {
+    return fromFilter.value || todayYmd()
+  },
+  set(v) {
+    fromFilter.value = v
+  },
+})
+
+// 日付の前後送り（スケジュールビュー用）
+function shiftDate(days: number) {
+  const m = scheduleDate.value.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (!m) return
+  const d = new Date(`${scheduleDate.value}T00:00:00+09:00`)
+  d.setUTCDate(d.getUTCDate() + days)
+  scheduleDate.value = `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`
+}
+function goToday() { scheduleDate.value = todayYmd() }
 </script>
 
 <template>
@@ -197,9 +271,30 @@ function yen(n: number): string { return n.toLocaleString('ja-JP') }
       <h1 class="text-2xl font-semibold text-slate-900">
         予約・販売管理
       </h1>
-      <div class="ml-auto flex items-center gap-2">
+      <div class="ml-auto flex items-center gap-2 flex-wrap">
+        <!-- ビュー切替トグル -->
+        <div class="inline-flex border border-[#8c8f94] rounded-sm overflow-hidden text-sm">
+          <button
+            type="button"
+            class="px-3 py-1.5 inline-flex items-center gap-1"
+            :class="viewMode === 'list' ? 'bg-orange-500 text-white' : 'bg-white text-slate-700 hover:bg-[#f6f7f7]'"
+            @click="viewMode = 'list'"
+          >
+            <UIcon name="i-lucide-list" class="size-3.5" />
+            一覧
+          </button>
+          <button
+            type="button"
+            class="px-3 py-1.5 border-l border-[#8c8f94] inline-flex items-center gap-1"
+            :class="viewMode === 'schedule' ? 'bg-orange-500 text-white' : 'bg-white text-slate-700 hover:bg-[#f6f7f7]'"
+            @click="viewMode = 'schedule'"
+          >
+            <UIcon name="i-lucide-calendar-days" class="size-3.5" />
+            スケジュール
+          </button>
+        </div>
         <button
-          v-if="hasPermission('sale:edit')"
+          v-if="viewMode === 'list' && hasPermission('sale:edit')"
           type="button"
           class="px-3 py-1.5 text-sm border border-purple-300 bg-purple-50 hover:bg-purple-100 text-purple-800 rounded-sm inline-flex items-center gap-1"
           @click="saleMode = !saleMode"
@@ -219,6 +314,105 @@ function yen(n: number): string { return n.toLocaleString('ja-JP') }
     <p class="text-sm text-slate-600 mb-4">
       予約と物販販売を一括管理。物販だけ買いに来たお客様もここから登録できます。
     </p>
+
+    <!-- ========== スケジュールビュー ========== -->
+    <template v-if="viewMode === 'schedule'">
+      <!-- 店舗選択 + 日付ナビ -->
+      <div class="bg-white border border-[#c3c4c7] rounded-sm p-3 mb-4 flex flex-wrap items-center gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">店舗</label>
+          <select
+            :value="storeIdFilter ?? ''"
+            class="px-2 py-1.5 text-sm border border-[#8c8f94] rounded-sm bg-white focus:outline-none focus:border-orange-500"
+            @change="storeIdFilter = Number(($event.target as HTMLSelectElement).value) || null"
+          >
+            <option value="">
+              店舗を選んでください
+            </option>
+            <option v-for="s in (stores ?? [])" :key="s.id" :value="s.id">
+              {{ s.name }}
+            </option>
+          </select>
+        </div>
+        <div v-if="storeIdFilter" class="flex items-end gap-2">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">対象日</label>
+            <input
+              v-model="scheduleDate"
+              type="date"
+              class="px-2 py-1.5 text-sm border border-[#8c8f94] rounded-sm focus:outline-none focus:border-orange-500"
+            >
+          </div>
+          <div class="inline-flex border border-[#8c8f94] rounded-sm overflow-hidden text-sm">
+            <button
+              type="button"
+              class="px-2.5 py-1.5 bg-white text-slate-700 hover:bg-[#f6f7f7]"
+              title="前日"
+              @click="shiftDate(-1)"
+            >
+              <UIcon name="i-lucide-chevron-left" class="size-4" />
+            </button>
+            <button
+              type="button"
+              class="px-3 py-1.5 border-l border-[#8c8f94] bg-white text-slate-700 hover:bg-[#f6f7f7]"
+              @click="goToday"
+            >
+              今日
+            </button>
+            <button
+              type="button"
+              class="px-2.5 py-1.5 border-l border-[#8c8f94] bg-white text-slate-700 hover:bg-[#f6f7f7]"
+              title="翌日"
+              @click="shiftDate(1)"
+            >
+              <UIcon name="i-lucide-chevron-right" class="size-4" />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 店舗未選択時 -->
+      <div
+        v-if="!storeIdFilter"
+        class="bg-white border border-dashed border-[#c3c4c7] rounded-sm p-10 text-center"
+      >
+        <UIcon name="i-lucide-building-2" class="size-8 text-slate-400 mx-auto mb-2" />
+        <p class="text-sm text-slate-600">
+          スケジュールを表示するには店舗を選択してください
+        </p>
+        <p class="text-xs text-slate-500 mt-1">
+          複数店舗のベッドを 1 画面に混ぜると把握しづらいため、1 店舗ずつ表示します。
+        </p>
+      </div>
+
+      <!-- スケジュール本体 -->
+      <!-- Nuxt の自動コンポーネント名: Admin/Reservations/ReservationsTimeline.vue は
+           ファイル名がディレクトリ名で始まるため AdminReservationsTimeline に短縮される -->
+      <AdminReservationsTimeline
+        v-else
+        :store-id="storeIdFilter"
+        :date="scheduleDate"
+      />
+    </template>
+
+    <!-- ========== 一覧ビュー ========== -->
+    <template v-else>
+    <!-- ステータスフィルタ（ピル形タブ・初期は「予約済」で件数を抑える） -->
+    <div class="mb-3 flex flex-wrap items-center gap-1.5">
+      <button
+        v-for="tab in statusTabs"
+        :key="tab.v"
+        type="button"
+        class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full border transition-colors"
+        :class="statusFilter === tab.v
+          ? 'bg-orange-500 text-white border-orange-500 shadow-sm'
+          : 'bg-white text-slate-700 border-slate-300 hover:border-orange-500 hover:bg-orange-50 hover:text-orange-700'"
+        @click="statusFilter = tab.v"
+      >
+        <UIcon :name="tab.icon" class="size-3.5" />
+        {{ tab.label }}
+      </button>
+    </div>
 
     <!-- 物販販売フォーム（インライン展開） -->
     <AdminReservationsQuickSale
@@ -245,23 +439,19 @@ function yen(n: number): string { return n.toLocaleString('ja-JP') }
           </option>
         </select>
       </div>
-      <div>
-        <label class="block text-xs font-semibold text-slate-700 mb-1">ステータス</label>
+      <!-- ベッド絞り込み（店舗選択時のみ表示） -->
+      <div v-if="storeIdFilter">
+        <label class="block text-xs font-semibold text-slate-700 mb-1">ベッド</label>
         <select
-          v-model="statusFilter"
+          :value="bedIdFilter ?? ''"
           class="px-2 py-1.5 text-sm border border-[#8c8f94] rounded-sm bg-white focus:outline-none focus:border-orange-500"
+          @change="bedIdFilter = Number(($event.target as HTMLSelectElement).value) || null"
         >
           <option value="">
             すべて
           </option>
-          <option value="CONFIRMED">
-            予約済（完了含む）
-          </option>
-          <option value="NO_SHOW">
-            無断キャンセル
-          </option>
-          <option value="CANCELLED">
-            キャンセル
+          <option v-for="b in (beds ?? [])" :key="b.id" :value="b.id">
+            {{ b.name }}{{ b.isActive ? '' : '（無効）' }}
           </option>
         </select>
       </div>
@@ -372,7 +562,14 @@ function yen(n: number): string { return n.toLocaleString('ja-JP') }
               {{ r.store.name }}
             </td>
             <td class="px-3 py-2 border-b border-[#dcdcde]">
-              <div class="font-medium">{{ r.customer.name ?? '(復号失敗)' }}</div>
+              <NuxtLink
+                :to="`/admin/customers/${r.customer.id}`"
+                class="font-medium text-blue-700 hover:text-blue-900 hover:underline inline-flex items-center gap-1"
+                @click.stop
+              >
+                {{ r.customer.name ?? '(復号失敗)' }}
+                <UIcon name="i-lucide-external-link" class="size-3 opacity-60" />
+              </NuxtLink>
               <div v-if="r.customer.phone" class="text-xs text-slate-500">{{ r.customer.phone }}</div>
             </td>
             <td class="px-3 py-2 border-b border-[#dcdcde]">
@@ -468,7 +665,13 @@ function yen(n: number): string { return n.toLocaleString('ja-JP') }
                 {{ s.product.name }} × {{ s.quantity }}
               </td>
               <td class="px-3 py-2">
-                {{ s.customer.name ?? '(復号失敗)' }}
+                <NuxtLink
+                  :to="`/admin/customers/${s.customer.id}`"
+                  class="text-blue-700 hover:text-blue-900 hover:underline inline-flex items-center gap-1"
+                >
+                  {{ s.customer.name ?? '(復号失敗)' }}
+                  <UIcon name="i-lucide-external-link" class="size-3 opacity-60" />
+                </NuxtLink>
               </td>
               <td class="px-3 py-2 text-right tabular-nums font-semibold">
                 ¥{{ yen(s.unitPriceJpyAtSale * s.quantity) }}
@@ -481,5 +684,6 @@ function yen(n: number): string { return n.toLocaleString('ja-JP') }
         </table>
       </div>
     </div>
+    </template>
   </div>
 </template>

@@ -26,6 +26,7 @@ export default defineEventHandler(async (event) => {
         lastLoginAt: null,
         termsAgreedAt: null,
         termsVersionAgreedAt: null,
+        withdrawnAt: new Date(),
       },
     }),
     prisma.emailVerificationToken.deleteMany({ where: { customerId } }),

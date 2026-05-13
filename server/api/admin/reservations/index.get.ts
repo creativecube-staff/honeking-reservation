@@ -6,7 +6,13 @@ import { prisma } from '../../../utils/prisma'
 // 管理画面: 予約一覧
 // クエリ:
 //   ?storeId        絞り込み（省略 = 全店舗）
-//   ?status         CONFIRMED | CANCELLED | NO_SHOW (省略 = 全部)
+//   ?bedId          ベッド絞り込み（省略 = 全ベッド。通常 storeId と組み合わせ）
+//   ?customerId     特定顧客の予約のみ（顧客詳細ページから利用）
+//   ?status         表示ステータス UPCOMING | COMPLETED | NO_SHOW | CANCELLED (省略 = 全部)
+//     - UPCOMING:  DB status=CONFIRMED かつ endAt > 現在（=「予約済」）
+//     - COMPLETED: DB status=CONFIRMED かつ endAt <= 現在（=「完了」）
+//     - NO_SHOW:   DB status=NO_SHOW
+//     - CANCELLED: DB status=CANCELLED
 //   ?from=YYYY-MM-DD&to=YYYY-MM-DD  日付範囲（startAt ベース）
 //   ?q              顧客名 / 電話 / メール / 予約コード で検索（hash 一致で個人情報を復号せず検索可能）
 //   ?page=1&pageSize=50  ページネーション
@@ -16,6 +22,10 @@ export default defineEventHandler(async (event) => {
   const query = getQuery(event)
   const storeIdRaw = typeof query.storeId === 'string' ? Number(query.storeId) : null
   const storeId = Number.isInteger(storeIdRaw) && storeIdRaw && storeIdRaw > 0 ? storeIdRaw : null
+  const bedIdRaw = typeof query.bedId === 'string' ? Number(query.bedId) : null
+  const bedId = Number.isInteger(bedIdRaw) && bedIdRaw && bedIdRaw > 0 ? bedIdRaw : null
+  const customerIdRaw = typeof query.customerId === 'string' ? Number(query.customerId) : null
+  const customerId = Number.isInteger(customerIdRaw) && customerIdRaw && customerIdRaw > 0 ? customerIdRaw : null
   const status = typeof query.status === 'string' ? query.status : ''
   const fromStr = typeof query.from === 'string' ? query.from : ''
   const toStr = typeof query.to === 'string' ? query.to : ''
@@ -23,10 +33,25 @@ export default defineEventHandler(async (event) => {
   const page = Math.max(1, Number(query.page) || 1)
   const pageSize = Math.min(200, Math.max(10, Number(query.pageSize) || 50))
 
+  const now = new Date()
   const where: Prisma.ReservationWhereInput = {}
   if (storeId) where.storeId = storeId
-  if (['CONFIRMED', 'CANCELLED', 'NO_SHOW'].includes(status)) {
-    where.status = status as Prisma.ReservationWhereInput['status']
+  if (bedId) where.bedId = bedId
+  if (customerId) where.customerId = customerId
+  // 表示ステータスを DB 条件に解釈
+  if (status === 'UPCOMING') {
+    where.status = 'CONFIRMED'
+    where.endAt = { gt: now }
+  }
+  else if (status === 'COMPLETED') {
+    where.status = 'CONFIRMED'
+    where.endAt = { lte: now }
+  }
+  else if (status === 'NO_SHOW') {
+    where.status = 'NO_SHOW'
+  }
+  else if (status === 'CANCELLED') {
+    where.status = 'CANCELLED'
   }
   if (/^\d{4}-\d{2}-\d{2}$/.test(fromStr) && /^\d{4}-\d{2}-\d{2}$/.test(toStr)) {
     where.startAt = {

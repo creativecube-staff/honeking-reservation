@@ -258,6 +258,13 @@ model Customer {
   // 同意した時点のバージョン文字列（例: "v1.0-2026-05-13"）も併記し、後で規約改定時の追跡を可能にする
   termsAgreedAt          DateTime?
   termsVersionAgreedAt   String?
+  // 管理者専用の接客メモ（PII を書かない前提のため暗号化なし）
+  // 例: 「腰痛持ち」「○○の話で盛り上がる」「左肩のみ施術不可」
+  note                   String?
+  // 退会日時。null = 退会していない（ゲストか会員）。
+  // 退会時は passwordHash / emailVerifiedAt / lastLoginAt / termsAgreedAt 等もクリアされる（withdraw.post.ts 参照）
+  // 暗号化済 name / phone / email は残し、来店履歴を保持する
+  withdrawnAt            DateTime?
   createdAt              DateTime  @default(now())
   updatedAt              DateTime  @updatedAt
 

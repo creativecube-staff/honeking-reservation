@@ -92,11 +92,15 @@ docker compose exec nuxt npx prisma db seed
 docker compose up -d
 docker compose down
 
-# .env を編集したら必須（restart では env_file が再ロードされない）
+# .env / docker-compose.yml を編集したら必須（restart では再ロードされない）
 docker compose up -d --force-recreate
+
+# Caddyfile の中身だけ編集したとき
+docker compose restart caddy
 
 # ログ追跡
 docker compose logs -f nuxt
+docker compose logs -f caddy
 
 # Prisma
 docker compose exec nuxt npx prisma migrate dev --name <変更名>
@@ -111,6 +115,56 @@ docker compose exec nuxt sh
 ```
 
 ホスト側で直接 `npm run dev` は実行しない。すべてコンテナ内で動かす。
+
+### `restart` と `up -d` の使い分け（重要）
+
+| 変更内容 | コマンド | 理由 |
+|---|---|---|
+| `Caddyfile` の中身だけ | `docker compose restart caddy` | Caddy が設定ファイルを再読込 |
+| `.env` を編集 | `docker compose up -d --force-recreate` | restart では `env_file` が再ロードされない |
+| `docker-compose.yml` を編集（ports / volumes / depends_on） | `docker compose up -d --force-recreate` | restart は既存コンテナを同じ設定で再起動するだけ |
+
+覚え方: **restart = 同じ設定で再起動 / up = 設定を読み直してコンテナ作り直し**
+
+## ローカルのリバースプロキシ構成
+
+本番に近い「ホスト分離 + HTTPS + edge-served 404」をローカルでも再現するため、Caddy をリバースプロキシとして導入。
+
+```
+ブラウザ
+  ↓ https://reserve.honeking.localhost / https://admin.honeking.localhost
+Caddy（80/443、HTTPS は内部 CA で自動取得）
+  ↓ Host ヘッダで振り分け
+Nuxt（コンテナ内、3000）
+```
+
+| ホスト | 用途 | 越境パスの扱い |
+|---|---|---|
+| `reserve.honeking.localhost` | お客様向け予約サイト | `/admin*` / `/api/admin*` は edge で静的 404 |
+| `admin.honeking.localhost` | 管理画面 | 公開向けページ・API は edge で静的 404 |
+| `localhost:3000` | Nuxt 直アクセス（HMR フォールバック） | 全パスアクセス可 |
+
+### 初回セットアップ手順
+
+```bash
+# 1. /etc/hosts に2行追加（sudo パスワード入力あり）
+echo "127.0.0.1 reserve.honeking.localhost
+127.0.0.1 admin.honeking.localhost" | sudo tee -a /etc/hosts
+
+# 2. コンテナ起動
+docker compose up -d --force-recreate
+
+# 3. Caddy の内部 CA を macOS Keychain に信頼登録
+docker compose cp caddy:/data/caddy/pki/authorities/local/root.crt ./caddy-local-ca.crt
+sudo security add-trusted-cert -d -r trustRoot \
+  -k /Library/Keychains/System.keychain \
+  ./caddy-local-ca.crt
+rm ./caddy-local-ca.crt
+
+# 4. ブラウザを完全再起動してから https://reserve.honeking.localhost にアクセス
+```
+
+静的 404 ページ: `caddy/error-pages/404.html`（JS でホスト名を見てテーマ切替）
 
 ## ディレクトリ構成
 

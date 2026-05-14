@@ -26,3 +26,23 @@ services:
     init: true
     tty: true
     stdin_open: true
+
+  # ローカル用リバースプロキシ
+  # http://reserve.honeking.localhost / http://admin.honeking.localhost で本番のホスト分離を再現
+  caddy:
+    image: caddy:2-alpine
+    container_name: honeking-caddy-dev
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./caddy/error-pages:/srv/error-pages:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - nuxt
+
+volumes:
+  caddy_data:
+  caddy_config:

@@ -1,0 +1,102 @@
+# ローカル開発用リバースプロキシ。本番想定にできるだけ寄せる。
+# .localhost ドメインは Caddy の内部 CA で自動 HTTPS 化される
+# 本番では別途 docker-compose.prod.yml で Let's Encrypt 付きの Caddyfile を用意
+
+# ======================================
+# 共通セキュリティヘッダ（本番でも流用する想定）
+# ======================================
+(security_headers) {
+	header {
+		# クリックジャッキング防止
+		X-Frame-Options "DENY"
+		# MIME sniffing 防止
+		X-Content-Type-Options "nosniff"
+		# Referer ポリシー（外部に余計な情報を漏らさない）
+		Referrer-Policy "strict-origin-when-cross-origin"
+		# サーバ情報を隠す
+		-Server
+
+		# 本番では以下も有効化する：
+		# Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		# Content-Security-Policy "default-src 'self'; ..."
+		# Permissions-Policy "camera=(), microphone=(), geolocation=()"
+	}
+}
+
+# ======================================
+# 共通 reverse_proxy 設定（WebSocket / HMR 透過）
+# ======================================
+(nuxt_upstream) {
+	reverse_proxy nuxt:3000 {
+		# X-Forwarded-* ヘッダは Caddy がデフォルトで付与
+		# WebSocket（Vite HMR）も自動的に透過
+	}
+}
+
+# ======================================
+# 共通エラーハンドラ（静的 404 ページを返す）
+#
+# Caddy 公式の標準パターン：`error <code>` でリクエスト処理を中断 →
+# handle_errors ブロックで静的 HTML をサーブする。これにより
+# レスポンスは「Status 404 + 完全な HTML 本文」になる。
+#
+# 採用理由：
+# 1. dev / prod で同じ見え方になる（Nuxt の dev デバッグ画面が出ない）
+# 2. Edge 側で完結するので Nuxt が落ちていても 404 ページは出る
+# 3. 大手 PaaS（Cloudflare / Vercel / Netlify）と同じ「edge-served error page」パターン
+#
+# ホスト別の見た目（Public / Admin）は HTML 内の JS で location.hostname を見て切替。
+# ======================================
+(error_pages) {
+	handle_errors {
+		rewrite * /404.html
+		root * /srv/error-pages
+		file_server
+	}
+}
+
+# ======================================
+# お客様向け予約サイト
+# ======================================
+reserve.honeking.localhost {
+	import security_headers
+
+	# /admin* と /api/admin* は admin ホスト専用なので 404 で隠す。
+	# 攻撃者に admin の存在を漏らさないため、ただの URL タイポ 404 と区別がつかない見た目で返す。
+	@admin_paths path /admin /admin/* /api/admin /api/admin/*
+	handle @admin_paths {
+		error 404
+	}
+
+	import nuxt_upstream
+	import error_pages
+}
+
+# ======================================
+# 管理画面
+# ======================================
+admin.honeking.localhost {
+	import security_headers
+
+	# 本番では admin ホストに IP allowlist をかける想定（ローカルでは無効）
+	# @office_ip remote_ip 203.0.113.0/24
+	# @disallowed not remote_ip 203.0.113.0/24
+	# handle @disallowed {
+	#     respond "Forbidden" 403
+	# }
+
+	# 公開向けページは admin ホストでは見せない
+	@public_pages path_regexp ^/(reserve|me|signup|login|forgot-email|verify-email|password-reset|privacy|terms)(/.*)?$
+	handle @public_pages {
+		error 404
+	}
+
+	# 公開向け API も同様にブロック
+	@public_apis path_regexp ^/api/(reservations|availability|stores|member)(/.*)?$
+	handle @public_apis {
+		error 404
+	}
+
+	import nuxt_upstream
+	import error_pages
+}

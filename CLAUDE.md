@@ -279,7 +279,38 @@ docker compose exec nuxt sh
 **注意**:
 
 - ホスト側で直接 `npm run dev` は実行しない。すべてコンテナ内で動かす。
-- `.env` を編集したら **`docker compose up -d --force-recreate`** が必須(restart では env_file が再ロードされない)。
+- **`restart` と `up -d` の使い分け**(超重要):
+  - `Caddyfile` の中身だけ編集 → `docker compose restart caddy`(設定再読み込みで OK)
+  - `.env` を編集 → `docker compose up -d --force-recreate`(restart では env_file が再ロードされない)
+  - `docker-compose.yml` を編集(ports / volumes / depends_on 追加など) → `docker compose up -d --force-recreate`(restart は既存設定で再起動するだけ、新しい mount や port は反映されない)
+  - 覚え方: **restart = 同じ設定で再起動 / up = 設定を読み直してコンテナ作り直し**
+
+## ローカルのリバースプロキシ構成(本番想定の再現)
+
+ローカルでも本番に近い「ホスト分離 + HTTPS + セキュリティヘッダ + edge-served 404」を再現するため、`Caddyfile` + `docker-compose.yml` の caddy サービスを導入済み。
+
+```text
+ブラウザ
+  ↓ https://reserve.honeking.localhost / https://admin.honeking.localhost
+Caddy(リバプロ、80/443)
+  ↓ Host ヘッダで振り分け + 越境パスは静的 404 を返す
+Nuxt(コンテナ内、3000)
+```
+
+- **`reserve.honeking.localhost`** : お客様向け予約サイト。`/admin*` と `/api/admin*` は edge で 404
+- **`admin.honeking.localhost`** : 管理画面。公開向けページ・API は edge で 404
+- **`localhost:3000`** : Nuxt 直アクセス(HMR フォールバック用に残置)
+- 静的 404 ページは `caddy/error-pages/404.html`(JS でホスト名を見てテーマ切替)。`error` ディレクティブ + `handle_errors` で 404 ステータス + HTML 本文両立
+- Caddy の内部 CA は macOS Keychain に信頼登録済み(`docker compose cp caddy:/data/caddy/pki/authorities/local/root.crt` → `security add-trusted-cert`)
+
+`/etc/hosts` に以下が必要:
+
+```text
+127.0.0.1 reserve.honeking.localhost
+127.0.0.1 admin.honeking.localhost
+```
+
+本番 Caddyfile は Phase 6 でこれをコピー + 数行差し替えて作成する(詳細は `prod_deploy_checklist` メモリ参照)。
 
 ## 現在のフェーズと進捗
 

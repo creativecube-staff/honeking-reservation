@@ -274,7 +274,7 @@ function hideOnError(event: Event) {
           <!-- 同じ施術で再予約: 店舗もメニューも現役の場合のみ -->
           <div v-if="r.store.isActive && r.menu.isActive" class="mt-2 flex justify-end">
             <NuxtLink
-              :to="`/reserve/${r.store.slug}/menu/${r.menu.id}/datetime`"
+              :to="`/${r.store.slug}/${r.menu.id}`"
               class="inline-flex items-center gap-1 px-3 py-1 rounded-md bg-orange-500 hover:bg-orange-600 text-white font-semibold text-xs transition"
             >
               <UIcon name="i-lucide-rotate-cw" class="size-3.5" />

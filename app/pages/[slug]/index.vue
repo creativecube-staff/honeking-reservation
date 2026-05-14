@@ -113,7 +113,7 @@ const specialMenus = computed(() => (menus.value ?? []).filter(m => m.storeId !=
           <ul class="space-y-3">
             <li v-for="m in commonMenus" :key="m.id">
               <NuxtLink
-                :to="`/reserve/${slug}/menu/${m.id}/datetime`"
+                :to="`/${slug}/${m.id}`"
                 class="block rounded-xl border-2 border-amber-300 bg-[#fff3db] p-4 sm:p-5 transition hover:bg-white hover:border-orange-500 hover:shadow-md"
               >
                 <div class="flex items-start gap-4">
@@ -157,7 +157,7 @@ const specialMenus = computed(() => (menus.value ?? []).filter(m => m.storeId !=
           <ul class="space-y-3">
             <li v-for="m in specialMenus" :key="m.id">
               <NuxtLink
-                :to="`/reserve/${slug}/menu/${m.id}/datetime`"
+                :to="`/${slug}/${m.id}`"
                 class="block rounded-xl border-2 border-orange-400 bg-orange-50 p-4 sm:p-5 transition hover:bg-white hover:border-orange-600 hover:shadow-md"
               >
                 <div class="flex items-start gap-4">

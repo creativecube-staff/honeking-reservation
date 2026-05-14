@@ -61,7 +61,7 @@ function hideOnError(event: Event) {
           <NuxtLink
             v-for="store in group.items"
             :key="store.id"
-            :to="`/reserve/${store.slug}/menu`"
+            :to="`/${store.slug}`"
             class="block group"
           >
             <div class="h-full overflow-hidden rounded-xl border-2 border-amber-300 bg-[#fff3db] shadow-sm transition group-hover:bg-white group-hover:border-orange-500 group-hover:shadow-lg">

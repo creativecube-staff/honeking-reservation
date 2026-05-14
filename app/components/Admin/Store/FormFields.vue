@@ -41,7 +41,7 @@ const errInput = 'border-red-600 focus:border-red-600 focus:shadow-[0_0_0_1px_#d
           :class="[baseInput, fieldErrors.slug && errInput]"
         >
         <p class="mt-1 text-xs text-slate-600">
-          URL に使用されます（半角英数字とハイフンのみ）。例: <code>/reserve/<strong>otakanomori</strong>/menu</code>
+          URL に使用されます（半角英数字とハイフンのみ）。例: <code>/<strong>otakanomori</strong></code>
         </p>
         <p v-if="fieldErrors.slug" class="mt-1 text-xs text-red-700">
           {{ fieldErrors.slug }}

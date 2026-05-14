@@ -194,12 +194,23 @@ Supabase Free は **1週間アクセスなしで一時停止**する点に注意
 ### お客様側予約フロー (Phase 3)
 
 ```text
-/                                                            ← 店舗選択
-/reserve/[storeId]/menu                                      ← メニュー選択
-/reserve/[storeId]/menu/[menuId]/datetime                    ← 日時選択
-/reserve/[storeId]/menu/[menuId]/datetime/[startAt]/confirm  ← 顧客情報・確認
-/reserve/complete/[code]                                     ← 完了画面
+/                                       ← 店舗選択
+/[storeSlug]                            ← メニュー選択
+/[storeSlug]/[menuId]                   ← 日時選択
+/[storeSlug]/[menuId]/[startAt]/confirm ← 顧客情報・確認
+/complete/[code]                        ← 完了画面
 ```
+
+ホスト `reserve.honeking.jp` で文脈が明示されてるため、`/reserve/` などのプレフィックスは付けない(SEO・URL の短さ重視)。
+
+`/[storeSlug]/...` はフラットな名前空間なので、**店舗 slug が固定ルート(`/me`, `/login`, `/complete` 等)と衝突しないよう** `shared/reservedSlugs.ts` でバリデーション。**新しい固定ルートを `app/pages/` 直下に追加するたび、このリストにも 1 行追加すること**。
+
+URL 階層の意味:
+
+- 第 1 セグメント = 店舗(`/otakanomori`)
+- 第 2 セグメント = メニュー ID(`/otakanomori/3`)
+- 第 3 セグメント = 開始時刻(`/otakanomori/3/202601151430/confirm`、`[startAt]` 形式は `YYYY-MM-DDTHHMM`、URL に `:` 不使用)
+- 末尾 `/confirm` は意図を明示するため残す(無いと数字の羅列になり意味不明になる)
 
 ### 会員マイページ (Phase 5)
 

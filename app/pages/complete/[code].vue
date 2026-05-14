@@ -154,23 +154,15 @@ useHead({ title: '予約完了 | honeking 予約' })
         <ul class="list-disc list-inside space-y-1 text-xs">
           <li>5〜10 分前を目安にご来店ください</li>
           <li>キャンセル・日時変更はお早めに店舗までお電話ください</li>
-          <li>このページをスクリーンショットしておくと安心です</li>
+          <li>このページをスクリーンショット、または印刷して保管しておくと安心です</li>
         </ul>
       </div>
 
       <!-- アクション -->
-      <div class="flex flex-col sm:flex-row gap-2">
-        <button
-          type="button"
-          class="flex-1 py-2.5 text-sm font-semibold rounded-md border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 inline-flex items-center justify-center gap-1"
-          @click="() => window.print()"
-        >
-          <UIcon name="i-lucide-printer" class="size-4" />
-          印刷
-        </button>
+      <div>
         <NuxtLink
           to="/"
-          class="flex-1 py-2.5 text-sm font-semibold rounded-md bg-orange-500 hover:bg-orange-600 text-white inline-flex items-center justify-center gap-1"
+          class="w-full py-2.5 text-sm font-semibold rounded-md bg-orange-500 hover:bg-orange-600 text-white inline-flex items-center justify-center gap-1"
         >
           トップへ戻る
           <UIcon name="i-lucide-chevron-right" class="size-4" />

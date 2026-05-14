@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { isReservedSlug } from '../reservedSlugs'
 
 // Store の共通バリデーションスキーマ。client（フォーム）と server（API）両方で使う。
 export const storeBaseSchema = z.object({
@@ -6,7 +7,10 @@ export const storeBaseSchema = z.object({
     .string()
     .min(1, 'スラッグは必須です')
     .max(50, 'スラッグは 50 文字以内で入力してください')
-    .regex(/^[a-z0-9-]+$/, 'スラッグは半角英数字とハイフンのみ使用できます'),
+    .regex(/^[a-z0-9-]+$/, 'スラッグは半角英数字とハイフンのみ使用できます')
+    .refine(s => !isReservedSlug(s), {
+      message: 'このスラッグはシステムで予約されているため使用できません',
+    }),
   prefecture: z.string().min(1, '都道府県は必須です').max(20, '20 文字以内で入力してください'),
   city: z.string().min(1, '市区町村は必須です').max(30, '30 文字以内で入力してください'),
   name: z.string().min(1, '店舗名は必須です').max(100, '100 文字以内で入力してください'),

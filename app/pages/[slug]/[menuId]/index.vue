@@ -154,7 +154,7 @@ function shiftRange(deltaDays: number) {
 // startAt 形式: "YYYY-MM-DDTHHMM"（URL に : を含めないため 4 桁時刻）
 function onSelectSlot(ymd: string, time: string) {
   const startAt = `${ymd}T${time.replace(':', '')}`
-  router.push(`/reserve/${slug.value}/menu/${menuId.value}/datetime/${startAt}/confirm`)
+  router.push(`/${slug.value}/${menuId.value}/${startAt}/confirm`)
 }
 
 function duration(min: number): string {
@@ -218,7 +218,7 @@ function dayClosedReason(day: DayAvail): string | null {
           所要時間: {{ duration(menu.durationMinutes) }} / ¥{{ yen(menu.priceJpy) }}
         </p>
         <NuxtLink
-          :to="`/reserve/${slug}/menu`"
+          :to="`/${slug}`"
           class="mt-2 inline-flex items-center gap-1 text-xs text-slate-600 hover:text-orange-700"
         >
           <UIcon name="i-lucide-chevron-left" class="size-4" />
@@ -397,7 +397,7 @@ function dayClosedReason(day: DayAvail): string | null {
 
       <div class="mt-8">
         <NuxtLink
-          :to="`/reserve/${slug}/menu`"
+          :to="`/${slug}`"
           class="text-sm text-slate-600 hover:text-orange-700 inline-flex items-center gap-1"
         >
           <UIcon name="i-lucide-chevron-left" class="size-4" />

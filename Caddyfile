@@ -57,6 +57,19 @@
 
 # ======================================
 # お客様向け予約サイト
+#
+# URL 構造（プレフィックスなし、SEO 重視）：
+#   /                                                            ← 店舗選択
+#   /[storeSlug]/menu                                            ← メニュー選択
+#   /[storeSlug]/menu/[menuId]/datetime                          ← 日時選択
+#   /[storeSlug]/menu/[menuId]/datetime/[startAt]/confirm        ← 確認
+#   /complete/[code]                                             ← 完了画面
+#   /me/*, /signup, /login, /forgot-email, /verify-email/*, /password-reset/*
+#   /privacy, /terms
+#
+# store slug が固定ルートと衝突しないよう shared/reservedSlugs.ts でバリデーション。
+#
+# block-list 方式：admin 関連のパスだけブロック。それ以外（slug 動的ルートを含む）は通す。
 # ======================================
 reserve.honeking.localhost {
 	import security_headers
@@ -74,29 +87,45 @@ reserve.honeking.localhost {
 
 # ======================================
 # 管理画面
+#
+# allow-list 方式：admin 関連と Nuxt 内部パスだけ通し、それ以外は全部 404。
+# お客様側 URL が `/[slug]/menu/...` のフラット構造になったため、
+# block-list（公開パスを列挙してブロック）は実装的に不可能（slug が動的）。
+# 「admin に必要なもの以外は全部 404」のほうが堅い。
 # ======================================
 admin.honeking.localhost {
 	import security_headers
 
-	# 本番では admin ホストに IP allowlist をかける想定（ローカルでは無効）
+	# Basic 認証ゲート（aplication login の前段、多層防御）
+	# - 検索エンジン / スキャナーから admin を完全隠蔽
+	# - 仮にアプリ層にゼロデイがあっても、ここで弾ける
+	# - .env の ADMIN_USER / ADMIN_PASSWORD_HASH（bcrypt）を使用
+	# - パスワード生成: docker compose exec caddy caddy hash-password --plaintext 'YourPwd'
+	basicauth {
+		{$ADMIN_USER} {$ADMIN_PASSWORD_HASH}
+	}
+
+	# 本番では admin ホストに IP allowlist もかける想定（ローカルでは無効）
 	# @office_ip remote_ip 203.0.113.0/24
 	# @disallowed not remote_ip 203.0.113.0/24
 	# handle @disallowed {
 	#     respond "Forbidden" 403
 	# }
 
-	# 公開向けページは admin ホストでは見せない
-	@public_pages path_regexp ^/(reserve|me|signup|login|forgot-email|verify-email|password-reset|privacy|terms)(/.*)?$
-	handle @public_pages {
+	# 許可するパス：admin 関連 + Nuxt 内部 + 慣習で必要な静的ファイル
+	@admin_allowed path /admin /admin/* /api/admin /api/admin/* \
+		/_nuxt /_nuxt/* /__nuxt /__nuxt/* /__nuxt_devtools /__nuxt_devtools/* \
+		/_payload.json /_payload* /_ipx /_ipx/* \
+		/__vite_ping /__vite* \
+		/favicon.ico /robots.txt /apple-touch-icon.png
+	handle @admin_allowed {
+		import nuxt_upstream
+	}
+
+	# 上記に該当しないものは全て edge で 404
+	handle {
 		error 404
 	}
 
-	# 公開向け API も同様にブロック
-	@public_apis path_regexp ^/api/(reservations|availability|stores|member)(/.*)?$
-	handle @public_apis {
-		error 404
-	}
-
-	import nuxt_upstream
 	import error_pages
 }

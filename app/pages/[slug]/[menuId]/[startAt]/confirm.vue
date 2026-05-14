@@ -151,7 +151,7 @@ async function onSubmit() {
         customer: customerBody,
       },
     })
-    await router.push(`/reserve/complete/${result.confirmationCode}`)
+    await router.push(`/complete/${result.confirmationCode}`)
   }
   catch (e) {
     const err = e as { statusMessage?: string, data?: { statusMessage?: string } }
@@ -436,7 +436,7 @@ async function onSubmit() {
 
       <div class="mt-6 text-center">
         <NuxtLink
-          :to="`/reserve/${slug}/menu/${menuId}/datetime`"
+          :to="`/${slug}/${menuId}`"
           class="text-sm text-slate-600 hover:text-orange-700 inline-flex items-center gap-1"
         >
           <UIcon name="i-lucide-chevron-left" class="size-4" />

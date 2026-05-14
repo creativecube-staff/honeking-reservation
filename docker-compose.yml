@@ -40,6 +40,11 @@ services:
       - ./caddy/error-pages:/srv/error-pages:ro
       - caddy_data:/data
       - caddy_config:/config
+    # Basic 認証で参照するため .env から ADMIN_USER / ADMIN_PASSWORD_HASH のみ渡す
+    # （DB 認証情報など他の env は Caddy に渡したくないので env_file は使わない）
+    environment:
+      - ADMIN_USER
+      - ADMIN_PASSWORD_HASH
     depends_on:
       - nuxt
 

@@ -36,16 +36,8 @@
 # ======================================
 # 共通エラーハンドラ（静的 404 ページを返す）
 #
-# Caddy 公式の標準パターン：`error <code>` でリクエスト処理を中断 →
-# handle_errors ブロックで静的 HTML をサーブする。これにより
+# `error <code>` でリクエスト処理を中断 → handle_errors で静的 HTML をサーブ。
 # レスポンスは「Status 404 + 完全な HTML 本文」になる。
-#
-# 採用理由：
-# 1. dev / prod で同じ見え方になる（Nuxt の dev デバッグ画面が出ない）
-# 2. Edge 側で完結するので Nuxt が落ちていても 404 ページは出る
-# 3. 大手 PaaS（Cloudflare / Vercel / Netlify）と同じ「edge-served error page」パターン
-#
-# ホスト別の見た目（Public / Admin）は HTML 内の JS で location.hostname を見て切替。
 # ======================================
 (error_pages) {
 	handle_errors {
@@ -57,26 +49,12 @@
 
 # ======================================
 # お客様向け予約サイト
-#
-# URL 構造（プレフィックスなし、SEO 重視）：
-#   /                                                            ← 店舗選択
-#   /[storeSlug]/menu                                            ← メニュー選択
-#   /[storeSlug]/menu/[menuId]/datetime                          ← 日時選択
-#   /[storeSlug]/menu/[menuId]/datetime/[startAt]/confirm        ← 確認
-#   /complete/[code]                                             ← 完了画面
-#   /me/*, /signup, /login, /forgot-email, /verify-email/*, /password-reset/*
-#   /privacy, /terms
-#
-# store slug が固定ルートと衝突しないよう shared/reservedSlugs.ts でバリデーション。
-#
-# block-list 方式：admin 関連のパスだけブロック。それ以外（slug 動的ルートを含む）は通す。
 # ======================================
 reserve.honeking.localhost {
 	import security_headers
 
-	# /admin* と /api/admin* は admin ホスト専用なので 404 で隠す。
-	# 攻撃者に admin の存在を漏らさないため、ただの URL タイポ 404 と区別がつかない見た目で返す。
-	@admin_paths path /admin /admin/* /api/admin /api/admin/*
+	# /dashboard* は admin ホスト専用なので 404 で隠す（情報隠蔽）
+	@admin_paths path /dashboard /dashboard/* /api/admin /api/admin/*
 	handle @admin_paths {
 		error 404
 	}
@@ -87,20 +65,13 @@ reserve.honeking.localhost {
 
 # ======================================
 # 管理画面
-#
-# allow-list 方式：admin 関連と Nuxt 内部パスだけ通し、それ以外は全部 404。
-# お客様側 URL が `/[slug]/menu/...` のフラット構造になったため、
-# block-list（公開パスを列挙してブロック）は実装的に不可能（slug が動的）。
-# 「admin に必要なもの以外は全部 404」のほうが堅い。
 # ======================================
 admin.honeking.localhost {
 	import security_headers
 
-	# Basic 認証ゲート（aplication login の前段、多層防御）
-	# - 検索エンジン / スキャナーから admin を完全隠蔽
-	# - 仮にアプリ層にゼロデイがあっても、ここで弾ける
+	# Basic 認証ゲート（アプリログイン前段、多層防御）
 	# - .env の ADMIN_USER / ADMIN_PASSWORD_HASH（bcrypt）を使用
-	# - パスワード生成: docker compose exec caddy caddy hash-password --plaintext 'YourPwd'
+	# - パスワード生成: docker compose exec caddy caddy hash-password
 	basicauth {
 		{$ADMIN_USER} {$ADMIN_PASSWORD_HASH}
 	}
@@ -112,11 +83,19 @@ admin.honeking.localhost {
 	#     respond "Forbidden" 403
 	# }
 
-	# 許可するパス：admin 関連 + Nuxt 内部 + 慣習で必要な静的ファイル
-	@admin_allowed path /admin /admin/* /api/admin /api/admin/* \
-		/_nuxt /_nuxt/* /__nuxt /__nuxt/* /__nuxt_devtools /__nuxt_devtools/* \
-		/_payload.json /_payload* /_ipx /_ipx/* \
-		/__vite_ping /__vite* \
+	# / は /dashboard へリダイレクト（admin ホストのトップは即ダッシュボードへ）
+	@root path /
+	handle @root {
+		redir * /dashboard 302
+	}
+
+	# 許可するパス：/login（共有ログイン、host-aware）+ /dashboard* + API + Nuxt 内部
+	# /api/_* は Nuxt UI のアイコン API（/api/_nuxt_icon）等のフレームワーク内部 API。
+	# 将来 Nuxt モジュールが追加する内部 API も /api/_xxx という命名規約なので一括許可。
+	@admin_allowed path /login \
+		/dashboard /dashboard/* \
+		/api/admin /api/admin/* /api/_* \
+		/_nuxt* /__nuxt* /_payload* /_ipx* /__vite* \
 		/favicon.ico /robots.txt /apple-touch-icon.png
 	handle @admin_allowed {
 		import nuxt_upstream

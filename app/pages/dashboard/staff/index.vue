@@ -103,7 +103,7 @@ const dateFmt = new Intl.DateTimeFormat('ja-JP', {
         スタッフ管理
       </h1>
       <NuxtLink
-        to="/admin/staff/new"
+        to="/dashboard/staff/new"
         class="inline-flex items-center px-3 py-1 border border-[#8c8f94] bg-[#f6f7f7] hover:bg-white text-slate-700 hover:text-slate-900 text-sm rounded-sm"
       >
         新規追加
@@ -195,14 +195,14 @@ const dateFmt = new Intl.DateTimeFormat('ja-JP', {
           >
             <td class="px-3 py-2.5 align-top">
               <NuxtLink
-                :to="`/admin/staff/${s.id}`"
+                :to="`/dashboard/staff/${s.id}`"
                 class="font-semibold text-blue-700 hover:text-blue-900 hover:underline"
               >
                 {{ s.name }}
               </NuxtLink>
               <div class="text-xs text-slate-600 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
                 <NuxtLink
-                  :to="`/admin/staff/${s.id}`"
+                  :to="`/dashboard/staff/${s.id}`"
                   class="text-blue-700 hover:text-blue-900 hover:underline"
                 >
                   編集

@@ -74,7 +74,7 @@ async function onSubmit() {
   submitting.value = true
   try {
     await $fetch(`/api/admin/stores/${id}`, { method: 'PATCH', body: parsed.data })
-    await navigateTo('/admin/stores')
+    await navigateTo('/dashboard/stores')
   }
   catch (e) {
     const err = e as { statusMessage?: string, data?: { statusMessage?: string } }
@@ -90,7 +90,7 @@ async function onDelete() {
   deleting.value = true
   try {
     await $fetch(`/api/admin/stores/${id}`, { method: 'DELETE' })
-    await navigateTo('/admin/stores')
+    await navigateTo('/dashboard/stores')
   }
   catch (e) {
     const err = e as { statusMessage?: string, data?: { statusMessage?: string } }
@@ -116,7 +116,7 @@ async function onDelete() {
       </span>
     </div>
     <p class="text-sm text-slate-600 mb-4">
-      <NuxtLink to="/admin/stores" class="text-blue-700 hover:text-blue-900 hover:underline">
+      <NuxtLink to="/dashboard/stores" class="text-blue-700 hover:text-blue-900 hover:underline">
         ← 店舗一覧に戻る
       </NuxtLink>
     </p>
@@ -162,7 +162,7 @@ async function onDelete() {
             {{ submitting ? '保存中...' : '更新' }}
           </button>
           <NuxtLink
-            to="/admin/stores"
+            to="/dashboard/stores"
             class="px-4 py-2 border border-[#8c8f94] bg-white hover:bg-[#f6f7f7] text-slate-700 text-sm rounded-sm"
           >
             キャンセル

@@ -136,6 +136,49 @@ Supabase Free は **1週間アクセスなしで一時停止**する点に注意
 3. 既存の命名規約・フォルダ構成に従う
 4. TypeScript の型を厳密に付ける(`any` 禁止)
 
+### Vue template のスコープ制限(よくハマる)
+
+Vue 3 の template 内では **`window` / `document` / `localStorage` / `navigator` 等のブラウザ global がデフォルトでアクセスできない**(`Math` / `Date` / `JSON` / `console` 等のホワイトリスト globals のみ通る)。
+
+```vue
+<!-- ❌ NG: window が undefined になりクラッシュ -->
+<button @click="() => window.print()">印刷</button>
+
+<!-- ✅ OK: script setup 側に関数化 -->
+<script setup lang="ts">
+function handlePrint() {
+  if (import.meta.client) window.print()
+}
+</script>
+<button @click="handlePrint">印刷</button>
+```
+
+ブラウザ API を使う処理はすべて `<script setup>` 側に切り出すルール。
+
+### Host-aware ページパターン
+
+`reserve.honeking.*` と `admin.honeking.*` の 2 ホスト構成だが、Nuxt はファイルベースルーティングのためホストで分岐できない。**両ホストで URL パスが共有される必要があるページ**(例: `/login`)は、`useRequestURL().hostname` で振り分ける。
+
+```vue
+<!-- app/pages/login.vue -->
+<script setup lang="ts">
+const url = useRequestURL()
+const isAdminHost = computed(() => url.hostname.startsWith('admin.'))
+definePageMeta({ layout: false })
+</script>
+
+<template>
+  <NuxtLayout v-if="!isAdminHost" name="default">
+    <LoginMemberLoginForm />
+  </NuxtLayout>
+  <LoginStaffLoginForm v-else />
+</template>
+```
+
+各ホスト専用のフォーム実装は `app/components/Login/{Member,Staff}LoginForm.vue` に切り出し済み。
+
+新しい共有ページを足すときは同パターンで(ただし基本は **ホストごとに別 URL パス**にするほうが simpler、共有は最終手段)。
+
 ### 個人情報を扱うコード
 
 - **必ず暗号化処理を通す**
@@ -226,18 +269,34 @@ URL 階層の意味:
 
 ### 管理画面
 
+`admin.honeking.jp` ホストの直下に以下を配置。ホスト名で「これは管理画面」が明示されてるため、URL に余計な `/admin/` プレフィックスは付けない。
+
 ```text
-/admin                    ← ダッシュボード
-/admin/reservations       ← 予約・販売管理(一覧⇄スケジュールビュー切替)
-/admin/customers          ← 顧客管理(会員区分タブ・休眠フィルタ)
-/admin/customers/[id]     ← 顧客詳細(基本情報・来店履歴・販売・回数券)
-/admin/shifts             ← シフト管理(月/週/日/スタッフ別)
-/admin/stores             ← 店舗管理(ベッド・特別メニュー・営業時間)
-/admin/staff              ← スタッフ管理(ログイン情報・権限)
-/admin/menus              ← 共通メニュー管理
-/admin/products           ← 商品マスタ
-/admin/sales              ← 売上管理
+/                         ← /dashboard へ 302 リダイレクト（Caddy で完結）
+/login                    ← スタッフログイン（reserve ホストの会員ログインと同 URL、host-aware）
+/dashboard                ← ダッシュボード
+/dashboard/reservations   ← 予約・販売管理(一覧⇄スケジュールビュー切替)
+/dashboard/customers      ← 顧客管理(会員区分タブ・休眠フィルタ)
+/dashboard/customers/[id] ← 顧客詳細(基本情報・来店履歴・販売・回数券)
+/dashboard/shifts         ← シフト管理(月/週/日/スタッフ別)
+/dashboard/stores         ← 店舗管理(ベッド・特別メニュー・営業時間)
+/dashboard/staff          ← スタッフ管理(ログイン情報・権限)
+/dashboard/menus          ← 共通メニュー管理
+/dashboard/products       ← 商品マスタ
+/dashboard/sales          ← 売上管理
+/dashboard/help           ← ヘルプ
 ```
+
+ファイル配置:
+
+- 全 admin ページ: `app/pages/dashboard/...`
+- ログインだけは `app/pages/login.vue`(両ホスト共有、host-aware で `app/components/Login/StaffLoginForm.vue` / `MemberLoginForm.vue` を切替)
+
+サーバ API は `server/api/admin/*` のまま(URL に出ないし、これを変えると変更ファイルが倍以上になる)。
+
+新しい admin 固定ページを足すときは `app/pages/dashboard/*` 配下に作る → 自動的に `/dashboard/*` で公開されるので追加対応不要(Caddy の allow-list は `/dashboard*` で網羅済み)。
+
+`/dashboard` は `shared/reservedSlugs.ts` に登録済みなので、店舗 slug と衝突する心配なし。
 
 URL に状態を載せる方針(リロードに強く、シェア可能、戻るボタンが自然に動く)。
 フィルタ・タブ・並び順・ページなどはすべてクエリパラメータで表現する。
@@ -308,9 +367,10 @@ Caddy(リバプロ、80/443)
 Nuxt(コンテナ内、3000)
 ```
 
-- **`reserve.honeking.localhost`** : お客様向け予約サイト。`/admin*` と `/api/admin*` は edge で 404
-- **`admin.honeking.localhost`** : 管理画面。公開向けページ・API は edge で 404
+- **`reserve.honeking.localhost`** : お客様向け予約サイト。`/dashboard*` と `/api/admin*` は edge で 404
+- **`admin.honeking.localhost`** : 管理画面。allow-list 方式で `/login` `/dashboard*` `/api/admin*` `/api/_*` `/_nuxt*` `/__nuxt*` `/__vite*` 等のみ通す、それ以外は edge で 404。`/` は `/dashboard` へ 302 リダイレクト
 - **`localhost:3000`** : Nuxt 直アクセス(HMR フォールバック用に残置)
+- **Basic 認証**: admin ホストに `basicauth` ディレクティブで多層防御。ユーザー名/パスワードは `.env` の `ADMIN_USER` / `ADMIN_PASSWORD_HASH`(bcrypt)を Caddy に環境変数として渡す。ハッシュ生成は `docker compose exec caddy caddy hash-password`。`.env` 内の `$` は `$$` にエスケープ
 - 静的 404 ページは `caddy/error-pages/404.html`(JS でホスト名を見てテーマ切替)。`error` ディレクティブ + `handle_errors` で 404 ステータス + HTML 本文両立
 - Caddy の内部 CA は macOS Keychain に信頼登録済み(`docker compose cp caddy:/data/caddy/pki/authorities/local/root.crt` → `security add-trusted-cert`)
 
@@ -323,25 +383,51 @@ Nuxt(コンテナ内、3000)
 
 本番 Caddyfile は Phase 6 でこれをコピー + 数行差し替えて作成する(詳細は `prod_deploy_checklist` メモリ参照)。
 
-## 現在のフェーズと進捗
+## 開発フェーズ概要
 
-- [x] 技術選定・アーキテクチャ決定
-- [x] データモデル設計
-- [x] **Phase 1 開発環境構築 完了**(Supabase 接続、Nuxt 雛形、Docker 化、Nuxt UI v4、Prisma 6、btree_gist)
-- [x] **Phase 2 データモデル構築 完了**(EXCLUDE / CHECK 制約、PublicHoliday、シードデータ)
-- [x] **Phase 3 お客様側予約フロー 完了**(店舗選択→メニュー→日時(時刻×曜日グリッド、◯/△/要TEL)→確認→完了、AES-256-GCM 暗号化、プライバシーポリシー)
-- [x] **Phase 4 管理画面の予約管理 完了**(一覧・検索・フィルタ・ページング、詳細・ステータス変更、手動予約作成、シフト日ビュー連動、ダッシュボード予約サマリ)
-- [x] **Phase 5 会員機能 + 管理機能拡張 完了**
-  - 会員: 新規登録・メール認証・ログイン・マイページ・予約履歴・メアド/パス変更・退会
-  - 物販・回数券: 在庫管理・販売 / 消費・売上集計
-  - スタッフ管理 + 役職別権限テンプレート
-  - 顧客管理画面: 一覧(会員区分タブ・休眠フィルタ)、詳細(接客メモ・来店履歴・販売・回数券)
-  - 予約・販売管理画面: ステータスピル形タブ・ベッドフィルタ・スケジュールビュー(ベッド×時間軸)
-  - 物販クイック販売: ゲスト購入モード・複数商品カート式・顧客の部分一致検索
-- [ ] **Phase 6 本番デプロイ**(VPS + Supabase Pro 昇格 + Cloudflare R2 バックアップ + HTTPS + 2FA)
-  - ⚠️ デプロイ時に **`NUXT_SESSION_COOKIE_SECURE=true`** を `.env` に必ず設定すること(dev では LAN IP HTTP 共有のため `nuxt.config.ts` で `false` に上書き中)
-  - ⚠️ **`RESERVATION_ENCRYPTION_KEY`** はバックアップ必須(消失で過去顧客情報が永久に復号不能)
-  - 2FA(TOTP)実装も Phase 6 範囲
+各フェーズが何を含むかの説明(進捗トラックは不要、これは仕様の章立て)。
+
+### Phase 1: 開発環境構築
+
+Supabase 接続、Nuxt 雛形、Docker 化(コンテナで全実行)、Nuxt UI v4、Prisma 6、`btree_gist` 拡張の有効化。
+
+### Phase 2: データモデル構築
+
+PostgreSQL の `EXCLUDE USING gist` 制約でダブルブッキングを DB レベルで防止、CHECK 制約で連絡先必須を保証、`PublicHoliday` で「祝日は日曜扱い」運用、シードデータ整備。
+
+### Phase 3: お客様側予約フロー
+
+「店舗選択 → メニュー選択 → 日時選択 → 顧客情報・確認 → 完了」の 4 ステップ。日時選択は時刻×曜日グリッドで `◯/△/要TEL` を表示。`AES-256-GCM` で個人情報暗号化、プライバシーポリシー整備。
+
+### Phase 4: 管理画面の予約管理
+
+予約一覧(検索・フィルタ・ページング)、予約詳細(ステータス変更・履歴)、手動予約作成、シフト日ビュー連動、ダッシュボードの予約サマリ。
+
+### Phase 5: 会員機能 + 管理機能拡張
+
+- 会員: 新規登録・メール認証・ログイン・マイページ・予約履歴・メアド/パス変更・退会
+- 物販・回数券: 在庫管理・販売 / 消費・売上集計
+- スタッフ管理 + 役職別権限テンプレート + 個別 permission overrides
+- 顧客管理画面: 一覧(会員区分タブ・休眠フィルタ)、詳細(接客メモ・来店履歴・販売・回数券)
+- 予約・販売管理画面: ステータスピル形タブ・ベッドフィルタ・スケジュールビュー(ベッド×時間軸)
+- 物販クイック販売: ゲスト購入モード・複数商品カート式・顧客の部分一致検索
+
+### Phase 5.5: URL 設計の刷新 + ローカル本番再現
+
+- お客様側 URL のフラット化: `/reserve/[slug]/menu/[id]/datetime/[at]/confirm` → `/[slug]/[id]/[at]/confirm`
+- 管理画面 URL の刷新: `/admin/*` → `/dashboard/*`、`/admin/login` → `/login`(host-aware)
+- ローカルに **Caddy リバースプロキシ**を導入し、本番想定の「ホスト分離 + HTTPS + Basic 認証 + edge-served 404」を再現
+- `shared/reservedSlugs.ts` で店舗 slug と固定ルートの衝突を防止
+- `app/components/Login/{Staff,Member}LoginForm.vue` を用意して `app/pages/login.vue` で host-aware に振り分け
+
+### Phase 6: 本番デプロイ
+
+VPS + Supabase Pro 昇格 + Cloudflare R2 バックアップ + HTTPS + 2FA(TOTP)。
+
+- ⚠️ デプロイ時に **`NUXT_SESSION_COOKIE_SECURE=true`** を `.env` に必ず設定すること(dev では LAN IP HTTP 共有のため `nuxt.config.ts` で `false` に上書き中)
+- ⚠️ **`RESERVATION_ENCRYPTION_KEY`** はバックアップ必須(消失で過去顧客情報が永久に復号不能)
+- 本番 Caddyfile は dev の `Caddyfile` を雛形に Let's Encrypt 有効化 + HSTS/CSP 追加 + IP allowlist + ホスト名差し替え
+- 2FA(TOTP)実装も Phase 6 範囲
 
 ## 参考資料
 

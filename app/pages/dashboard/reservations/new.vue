@@ -124,7 +124,7 @@ async function onSubmit() {
         forceOverride: form.forceOverride,
       },
     })
-    await router.push(`/admin/reservations/${result.id}`)
+    await router.push(`/dashboard/reservations/${result.id}`)
   }
   catch (e) {
     const err = e as { statusMessage?: string, data?: { statusMessage?: string } }
@@ -148,7 +148,7 @@ const timeOptions = computed(() => {
 <template>
   <div>
     <div class="mb-4">
-      <NuxtLink to="/admin/reservations" class="text-sm text-slate-600 hover:text-orange-700 inline-flex items-center gap-1">
+      <NuxtLink to="/dashboard/reservations" class="text-sm text-slate-600 hover:text-orange-700 inline-flex items-center gap-1">
         <UIcon name="i-lucide-chevron-left" class="size-4" />
         予約一覧へ戻る
       </NuxtLink>
@@ -349,7 +349,7 @@ const timeOptions = computed(() => {
       <!-- 送信 -->
       <div class="flex gap-3">
         <NuxtLink
-          to="/admin/reservations"
+          to="/dashboard/reservations"
           class="px-4 py-2 text-sm border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 rounded-sm"
         >
           キャンセル

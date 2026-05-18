@@ -278,7 +278,7 @@ async function saveNote() {
       </span>
     </div>
     <p class="text-sm text-slate-600 mb-4">
-      <NuxtLink to="/admin/customers" class="text-blue-700 hover:text-blue-900 hover:underline">
+      <NuxtLink to="/dashboard/customers" class="text-blue-700 hover:text-blue-900 hover:underline">
         ← 顧客一覧に戻る
       </NuxtLink>
     </p>
@@ -601,7 +601,7 @@ async function saveNote() {
               v-else
               :key="r.id"
               class="border-b border-[#f0f0f1] last:border-b-0 hover:bg-orange-50/40 cursor-pointer"
-              @click="router.push(`/admin/reservations/${r.id}`)"
+              @click="router.push(`/dashboard/reservations/${r.id}`)"
             >
               <td class="px-3 py-2 tabular-nums font-mono text-xs">
                 {{ r.confirmationCode }}
@@ -723,7 +723,7 @@ async function saveNote() {
               <td class="px-3 py-2 font-mono text-xs">
                 <NuxtLink
                   v-if="s.reservation"
-                  :to="`/admin/reservations/${s.reservation.id}`"
+                  :to="`/dashboard/reservations/${s.reservation.id}`"
                   class="text-blue-700 hover:text-blue-900 hover:underline"
                 >
                   {{ s.reservation.confirmationCode }}

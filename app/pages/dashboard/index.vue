@@ -32,7 +32,7 @@ const reservationWidgets = computed(() => [
     label: '今日の予約',
     value: summary.value?.todayReservations ?? 0,
     icon: 'i-lucide-calendar-check',
-    to: `/admin/reservations?from=${todayYmd()}&to=${todayYmd()}&status=CONFIRMED`,
+    to: `/dashboard/reservations?from=${todayYmd()}&to=${todayYmd()}&status=CONFIRMED`,
     actionLabel: '本日の一覧へ',
     accent: 'orange' as const,
   },
@@ -40,7 +40,7 @@ const reservationWidgets = computed(() => [
     label: '今週の予約',
     value: summary.value?.weekReservations ?? 0,
     icon: 'i-lucide-calendar-range',
-    to: '/admin/reservations?status=CONFIRMED',
+    to: '/dashboard/reservations?status=CONFIRMED',
     actionLabel: '予約一覧へ',
     accent: 'orange' as const,
   },
@@ -48,7 +48,7 @@ const reservationWidgets = computed(() => [
     label: '今後の予約 (確定)',
     value: summary.value?.upcomingConfirmed ?? 0,
     icon: 'i-lucide-list-todo',
-    to: '/admin/reservations?status=CONFIRMED',
+    to: '/dashboard/reservations?status=CONFIRMED',
     actionLabel: '予約一覧へ',
     accent: 'orange' as const,
   },
@@ -59,28 +59,28 @@ const widgets = computed(() => [
     label: '有効な店舗',
     value: summary.value?.stores ?? 0,
     icon: 'i-lucide-building-2',
-    to: '/admin/stores',
+    to: '/dashboard/stores',
     actionLabel: '店舗管理へ',
   },
   {
     label: '有効なベッド',
     value: summary.value?.beds ?? 0,
     icon: 'i-lucide-bed-double',
-    to: '/admin/stores',
+    to: '/dashboard/stores',
     actionLabel: '店舗詳細から編集',
   },
   {
     label: '有効なスタッフ',
     value: summary.value?.staff ?? 0,
     icon: 'i-lucide-user-round',
-    to: '/admin/staff',
+    to: '/dashboard/staff',
     actionLabel: 'スタッフ管理へ',
   },
   {
     label: '有効なメニュー',
     value: summary.value?.menus ?? 0,
     icon: 'i-lucide-clipboard-list',
-    to: '/admin/stores',
+    to: '/dashboard/stores',
     actionLabel: '店舗詳細から編集',
   },
 ])
@@ -224,27 +224,27 @@ const todayTotal = computed(() => {
         </div>
         <ul class="p-5 space-y-2 text-sm">
           <li>
-            <NuxtLink to="/admin/reservations/new" class="text-blue-700 hover:text-blue-900 hover:underline">
+            <NuxtLink to="/dashboard/reservations/new" class="text-blue-700 hover:text-blue-900 hover:underline">
               + 予約を手動で追加
             </NuxtLink>
           </li>
           <li>
-            <NuxtLink to="/admin/reservations" class="text-blue-700 hover:text-blue-900 hover:underline">
+            <NuxtLink to="/dashboard/reservations" class="text-blue-700 hover:text-blue-900 hover:underline">
               予約一覧を見る
             </NuxtLink>
           </li>
           <li>
-            <NuxtLink to="/admin/shifts" class="text-blue-700 hover:text-blue-900 hover:underline">
+            <NuxtLink to="/dashboard/shifts" class="text-blue-700 hover:text-blue-900 hover:underline">
               本日のシフトを編集
             </NuxtLink>
           </li>
           <li>
-            <NuxtLink to="/admin/staff/new" class="text-blue-700 hover:text-blue-900 hover:underline">
+            <NuxtLink to="/dashboard/staff/new" class="text-blue-700 hover:text-blue-900 hover:underline">
               + 新しいスタッフを追加
             </NuxtLink>
           </li>
           <li>
-            <NuxtLink to="/admin/stores" class="text-blue-700 hover:text-blue-900 hover:underline">
+            <NuxtLink to="/dashboard/stores" class="text-blue-700 hover:text-blue-900 hover:underline">
               営業時間 / 店休日を編集（店舗詳細のタブから）
             </NuxtLink>
           </li>
@@ -266,7 +266,7 @@ const todayTotal = computed(() => {
           </li>
           <li class="text-xs text-slate-500 pt-2 border-t border-[#dcdcde]">
             予約フローはお客様側 <NuxtLink to="/" class="text-blue-700 hover:underline">トップ</NuxtLink> または管理画面の
-            <NuxtLink to="/admin/reservations/new" class="text-blue-700 hover:underline">手動予約作成</NuxtLink> から
+            <NuxtLink to="/dashboard/reservations/new" class="text-blue-700 hover:underline">手動予約作成</NuxtLink> から
           </li>
         </ul>
       </div>

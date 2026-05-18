@@ -90,7 +90,7 @@ async function onDelete() {
   deleting.value = true
   try {
     await $fetch(`/api/admin/staff/${id}`, { method: 'DELETE' })
-    await navigateTo('/admin/staff')
+    await navigateTo('/dashboard/staff')
   }
   catch (e) {
     const err = e as { statusMessage?: string, data?: { statusMessage?: string } }
@@ -146,7 +146,7 @@ async function resetPassword() {
       </span>
     </div>
     <p class="text-sm text-slate-600 mb-4">
-      <NuxtLink to="/admin/staff" class="text-blue-700 hover:text-blue-900 hover:underline">
+      <NuxtLink to="/dashboard/staff" class="text-blue-700 hover:text-blue-900 hover:underline">
         ← スタッフ一覧に戻る
       </NuxtLink>
     </p>
@@ -179,7 +179,7 @@ async function resetPassword() {
             {{ submitting ? '保存中...' : '更新' }}
           </button>
           <NuxtLink
-            to="/admin/staff"
+            to="/dashboard/staff"
             class="px-4 py-2 border border-[#8c8f94] bg-white hover:bg-[#f6f7f7] text-slate-700 text-sm rounded-sm"
           >
             キャンセル

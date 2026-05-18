@@ -449,7 +449,7 @@ void ROLE_LABEL
 <template>
   <div>
     <div class="mb-4">
-      <NuxtLink to="/admin/reservations" class="text-sm text-slate-600 hover:text-orange-700 inline-flex items-center gap-1">
+      <NuxtLink to="/dashboard/reservations" class="text-sm text-slate-600 hover:text-orange-700 inline-flex items-center gap-1">
         <UIcon name="i-lucide-chevron-left" class="size-4" />
         予約一覧へ戻る
       </NuxtLink>
@@ -563,7 +563,7 @@ void ROLE_LABEL
               <dt class="text-xs text-slate-500">お名前</dt>
               <dd class="text-base font-semibold text-slate-900">
                 <NuxtLink
-                  :to="`/admin/customers/${reservation.customer.id}`"
+                  :to="`/dashboard/customers/${reservation.customer.id}`"
                   class="text-blue-700 hover:text-blue-900 hover:underline inline-flex items-center gap-1.5"
                 >
                   {{ reservation.customer.name ?? '(復号できませんでした)' }}

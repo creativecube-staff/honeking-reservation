@@ -19,6 +19,7 @@ export const RESERVED_SLUGS: ReadonlyArray<string> = [
   // フレームワーク / API 予約
   'api',
   'admin',
+  'dashboard',
   '_nuxt',
   '__nuxt',
   '_payload',

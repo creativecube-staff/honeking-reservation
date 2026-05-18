@@ -6,9 +6,9 @@ const props = defineProps<{
 }>()
 
 const url = useRequestURL()
-// admin.* ホスト or /admin パス配下なら admin 文脈とみなす
+// admin.* ホスト or /dashboard パス配下なら admin 文脈とみなす
 const isAdminContext = computed(() => {
-  return url.hostname.startsWith('admin.') || (props.error?.url ?? url.pathname).startsWith('/admin')
+  return url.hostname.startsWith('admin.') || (props.error?.url ?? url.pathname).startsWith('/dashboard')
 })
 
 const statusCode = computed(() => props.error?.statusCode ?? 404)
@@ -31,7 +31,7 @@ const description = computed(() => {
   return 'リクエストの処理中に問題が発生しました。'
 })
 
-const homeHref = computed(() => (isAdminContext.value ? '/admin' : '/'))
+const homeHref = computed(() => (isAdminContext.value ? '/dashboard' : '/'))
 const homeLabel = computed(() => (isAdminContext.value ? '管理画面トップへ' : 'サイトトップへ戻る'))
 
 async function handleHome() {

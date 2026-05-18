@@ -41,7 +41,7 @@ async function onSubmit() {
   submitting.value = true
   try {
     await $fetch('/api/admin/products', { method: 'POST', body: parsed.data })
-    await navigateTo('/admin/products')
+    await navigateTo('/dashboard/products')
   }
   catch (e) {
     const err = e as { statusMessage?: string, data?: { statusMessage?: string } }
@@ -61,7 +61,7 @@ async function onSubmit() {
       </h1>
     </div>
     <p class="text-sm text-slate-600 mb-4">
-      <NuxtLink to="/admin/products" class="text-blue-700 hover:text-blue-900 hover:underline">
+      <NuxtLink to="/dashboard/products" class="text-blue-700 hover:text-blue-900 hover:underline">
         ← 商品一覧に戻る
       </NuxtLink>
     </p>
@@ -178,7 +178,7 @@ async function onSubmit() {
         <button type="submit" :disabled="submitting" class="px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white text-sm font-semibold rounded-sm">
           {{ submitting ? '保存中...' : '保存' }}
         </button>
-        <NuxtLink to="/admin/products" class="px-4 py-2 border border-[#8c8f94] bg-white hover:bg-[#f6f7f7] text-slate-700 text-sm rounded-sm">
+        <NuxtLink to="/dashboard/products" class="px-4 py-2 border border-[#8c8f94] bg-white hover:bg-[#f6f7f7] text-slate-700 text-sm rounded-sm">
           キャンセル
         </NuxtLink>
       </div>

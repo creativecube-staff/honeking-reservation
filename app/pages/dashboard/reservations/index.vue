@@ -280,7 +280,7 @@ function goToday() { scheduleDate.value = todayYmd() }
           {{ saleMode ? '物販販売フォームを閉じる' : '物販販売を追加' }}
         </button>
         <NuxtLink
-          to="/admin/reservations/new"
+          to="/dashboard/reservations/new"
           class="px-3 py-1.5 text-sm bg-orange-500 hover:bg-orange-600 text-white rounded-sm inline-flex items-center gap-1"
         >
           <UIcon name="i-lucide-plus" class="size-4" />
@@ -512,7 +512,7 @@ function goToday() { scheduleDate.value = todayYmd() }
             v-else
             :key="r.id"
             class="hover:bg-orange-50/40 cursor-pointer"
-            @click="router.push(`/admin/reservations/${r.id}`)"
+            @click="router.push(`/dashboard/reservations/${r.id}`)"
           >
             <td class="px-3 py-2 border-b border-[#dcdcde] tabular-nums font-mono text-xs">
               {{ r.confirmationCode }}
@@ -526,7 +526,7 @@ function goToday() { scheduleDate.value = todayYmd() }
             </td>
             <td class="px-3 py-2 border-b border-[#dcdcde]">
               <NuxtLink
-                :to="`/admin/customers/${r.customer.id}`"
+                :to="`/dashboard/customers/${r.customer.id}`"
                 class="font-medium text-blue-700 hover:text-blue-900 hover:underline inline-flex items-center gap-1"
                 @click.stop
               >
@@ -613,7 +613,7 @@ function goToday() { scheduleDate.value = todayYmd() }
               </td>
               <td class="px-3 py-2">
                 <NuxtLink
-                  :to="`/admin/customers/${s.customer.id}`"
+                  :to="`/dashboard/customers/${s.customer.id}`"
                   class="text-blue-700 hover:text-blue-900 hover:underline inline-flex items-center gap-1"
                 >
                   {{ s.customer.name ?? '(復号失敗)' }}

@@ -93,7 +93,7 @@ function yen(n: number): string { return n.toLocaleString('ja-JP') }
       </h1>
       <NuxtLink
         v-if="canEdit"
-        to="/admin/products/new"
+        to="/dashboard/products/new"
         class="inline-flex items-center px-3 py-1 border border-[#8c8f94] bg-[#f6f7f7] hover:bg-white text-slate-700 hover:text-slate-900 text-sm rounded-sm"
       >
         新規追加
@@ -181,11 +181,11 @@ function yen(n: number): string { return n.toLocaleString('ja-JP') }
             class="group border-b border-[#f0f0f1] last:border-b-0 hover:bg-[#f6f7f7]"
           >
             <td class="px-3 py-2.5 align-top">
-              <NuxtLink :to="`/admin/products/${p.id}`" class="font-semibold text-blue-700 hover:text-blue-900 hover:underline">
+              <NuxtLink :to="`/dashboard/products/${p.id}`" class="font-semibold text-blue-700 hover:text-blue-900 hover:underline">
                 {{ p.name }}
               </NuxtLink>
               <div v-if="canEdit" class="text-xs text-slate-600 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                <NuxtLink :to="`/admin/products/${p.id}`" class="text-blue-700 hover:text-blue-900 hover:underline">
+                <NuxtLink :to="`/dashboard/products/${p.id}`" class="text-blue-700 hover:text-blue-900 hover:underline">
                   編集
                 </NuxtLink>
                 <span class="text-slate-300 mx-1.5">|</span>

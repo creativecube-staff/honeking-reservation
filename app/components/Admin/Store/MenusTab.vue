@@ -190,7 +190,7 @@ const errInput = 'border-red-600 focus:border-red-600 focus:shadow-[0_0_0_1px_#d
       <p>このタブでは <strong>この店舗だけの特別メニュー</strong> を管理します。</p>
       <p class="text-xs text-slate-600 mt-1">
         全店舗で利用できる共通メニューは
-        <NuxtLink to="/admin/menus" class="text-blue-700 hover:text-blue-900 hover:underline">
+        <NuxtLink to="/dashboard/menus" class="text-blue-700 hover:text-blue-900 hover:underline">
           メニュー管理
         </NuxtLink>
         から登録してください。

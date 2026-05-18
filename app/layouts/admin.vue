@@ -6,6 +6,15 @@ import { ROLE_LABEL } from '~~/shared/permissions'
 
 const { user, fetch: fetchSession, clear: clearSession } = useUserSession()
 
+// 「サイトを表示」リンク用に admin.* ホストから reserve.* ホストの URL を組み立てる。
+// dev: admin.honeking.localhost → reserve.honeking.localhost
+// prod: admin.honeking.jp → reserve.honeking.jp
+const requestUrl = useRequestURL()
+const customerSiteUrl = computed(() => {
+  const customerHost = requestUrl.hostname.replace(/^admin\./, 'reserve.')
+  return `${requestUrl.protocol}//${customerHost}${requestUrl.port ? `:${requestUrl.port}` : ''}/`
+})
+
 // ナビ定義。各項目に必要 permission を紐付け、ユーザーの permissions でフィルタする。
 // - 店舗管理: 基本情報・ベッド・特別メニュー・営業時間・店休日をタブで集約
 // - スタッフ管理: 全店舗のスタッフを横断管理（メイン店舗で絞り込み）。ログイン情報・役職もここで設定
@@ -14,16 +23,16 @@ const { user, fetch: fetchSession, clear: clearSession } = useUserSession()
 // 各項目に必要 permission を紐付けてユーザーの permissions でフィルタする。
 // permission が null の項目（ヘルプ等）は全員に表示する。
 const allNavItems: ReadonlyArray<{ icon: string, label: string, to: string, permission: Permission | null }> = [
-  { icon: 'i-lucide-home', label: 'ダッシュボード', to: '/admin', permission: 'dashboard:view' },
-  { icon: 'i-lucide-calendar-check', label: '予約・販売管理', to: '/admin/reservations', permission: 'reservation:view' },
-  { icon: 'i-lucide-users', label: '顧客管理', to: '/admin/customers', permission: 'customer:view' },
-  { icon: 'i-lucide-calendar-clock', label: 'シフト管理', to: '/admin/shifts', permission: 'shift:view' },
-  { icon: 'i-lucide-building-2', label: '店舗管理', to: '/admin/stores', permission: 'store:view' },
-  { icon: 'i-lucide-user-round', label: 'スタッフ管理', to: '/admin/staff', permission: 'staff:view' },
-  { icon: 'i-lucide-clipboard-list', label: 'メニュー管理', to: '/admin/menus', permission: 'menu:view' },
-  { icon: 'i-lucide-package', label: '商品管理', to: '/admin/products', permission: 'product:view' },
-  { icon: 'i-lucide-trending-up', label: '売上管理', to: '/admin/sales', permission: 'sale:view' },
-  { icon: 'i-lucide-circle-help', label: 'ヘルプ', to: '/admin/help', permission: null },
+  { icon: 'i-lucide-home', label: 'ダッシュボード', to: '/dashboard', permission: 'dashboard:view' },
+  { icon: 'i-lucide-calendar-check', label: '予約・販売管理', to: '/dashboard/reservations', permission: 'reservation:view' },
+  { icon: 'i-lucide-users', label: '顧客管理', to: '/dashboard/customers', permission: 'customer:view' },
+  { icon: 'i-lucide-calendar-clock', label: 'シフト管理', to: '/dashboard/shifts', permission: 'shift:view' },
+  { icon: 'i-lucide-building-2', label: '店舗管理', to: '/dashboard/stores', permission: 'store:view' },
+  { icon: 'i-lucide-user-round', label: 'スタッフ管理', to: '/dashboard/staff', permission: 'staff:view' },
+  { icon: 'i-lucide-clipboard-list', label: 'メニュー管理', to: '/dashboard/menus', permission: 'menu:view' },
+  { icon: 'i-lucide-package', label: '商品管理', to: '/dashboard/products', permission: 'product:view' },
+  { icon: 'i-lucide-trending-up', label: '売上管理', to: '/dashboard/sales', permission: 'sale:view' },
+  { icon: 'i-lucide-circle-help', label: 'ヘルプ', to: '/dashboard/help', permission: null },
 ]
 
 const navItems = computed(() => {
@@ -38,8 +47,8 @@ const userRoleLabel = computed(() => {
 
 const route = useRoute()
 function isActive(to: string) {
-  // /admin だけは完全一致、それ以外は前方一致でアクティブ判定
-  if (to === '/admin') return route.path === '/admin'
+  // /dashboard だけは完全一致、それ以外は前方一致でアクティブ判定
+  if (to === '/dashboard') return route.path === '/dashboard'
   return route.path === to || route.path.startsWith(`${to}/`)
 }
 
@@ -47,7 +56,7 @@ async function logout() {
   await $fetch('/api/admin/logout', { method: 'POST' })
   await fetchSession()
   clearSession()
-  await navigateTo('/admin/login', { replace: true })
+  await navigateTo('/login', { replace: true })
 }
 </script>
 
@@ -56,12 +65,12 @@ async function logout() {
     <!-- WordPress 風 admin bar -->
     <header class="fixed top-0 inset-x-0 h-8 bg-[#1d2327] text-[#c3c4c7] flex items-center justify-between px-3 text-xs z-30">
       <div class="flex items-center gap-3">
-        <NuxtLink to="/admin" class="font-semibold text-white hover:text-orange-400">
+        <NuxtLink to="/dashboard" class="font-semibold text-white hover:text-orange-400">
           honeking 管理
         </NuxtLink>
-        <NuxtLink to="/" class="hover:text-orange-400" target="_blank">
+        <a :href="customerSiteUrl" class="hover:text-orange-400" target="_blank" rel="noopener">
           サイトを表示
-        </NuxtLink>
+        </a>
       </div>
       <div class="flex items-center gap-3">
         <span>

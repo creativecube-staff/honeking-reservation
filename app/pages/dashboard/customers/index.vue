@@ -280,11 +280,11 @@ function clearFilters() {
             :key="c.id"
             class="border-b border-[#f0f0f1] last:border-b-0 hover:bg-orange-50/40 cursor-pointer"
             :class="c.membership === 'withdrawn' ? 'opacity-60' : ''"
-            @click="router.push(`/admin/customers/${c.id}`)"
+            @click="router.push(`/dashboard/customers/${c.id}`)"
           >
             <td class="px-3 py-2">
               <NuxtLink
-                :to="`/admin/customers/${c.id}`"
+                :to="`/dashboard/customers/${c.id}`"
                 class="font-semibold text-blue-700 hover:text-blue-900 hover:underline"
                 @click.stop
               >

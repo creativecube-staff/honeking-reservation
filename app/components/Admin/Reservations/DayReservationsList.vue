@@ -63,7 +63,7 @@ const grouped = computed(() => {
 
 const router = useRouter()
 function gotoDetail(id: number) {
-  router.push(`/admin/reservations/${id}`)
+  router.push(`/dashboard/reservations/${id}`)
 }
 </script>
 

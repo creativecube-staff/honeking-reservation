@@ -105,7 +105,7 @@ function statusColorClasses(r: Reservation): string {
 function onRangeClick(r: CalendarRange) {
   const id = parseReservationId(r.id)
   if (Number.isInteger(id) && id > 0) {
-    router.push(`/admin/reservations/${id}`)
+    router.push(`/dashboard/reservations/${id}`)
   }
 }
 

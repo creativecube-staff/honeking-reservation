@@ -8,29 +8,27 @@ const { user, fetch: fetchSession, clear: clearSession } = useUserSession()
 
 // 管理画面共通のタイトル・ファビコン上書き。
 // - タイトル: 各ページが useHead で上書きしない場合のデフォルト。
-// - ファビコン: モノクロの管理画面ブランド用。
+// - ファビコン: 実ロゴの grayscale 版 PNG を public/ から読む(管理画面はモノクロブランド)。
 //
-// 設計: 当初は honeking.jp 本体のカラーファビコンを SVG <image href> で参照して
-// feColorMatrix で grayscale 化していたが、ブラウザのセキュリティ制限で
-// data URI 内の <image href="https://外部"> は読まれないため非表示になっていた。
-// 代わりに「黒地に白い H」の純 SVG を埋め込み、外部参照なしで確実に表示させる。
+// 配置:
+//   public/admin-favicon-32.png   ← 32x32 px の grayscale PNG
+//   public/admin-favicon-180.png  ← 180x180 px の grayscale PNG (Apple touch icon 用)
 //
-// もし「実ロゴを grayscale 化した PNG を使いたい」場合は、
-// public/admin-favicon-32.png / admin-favicon-180.png を置いて、
-// 下記の inline SVG の代わりに { href: '/admin-favicon-32.png' } のように差し替える。
-const ADMIN_FAVICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#1d2327"/><text x="32" y="46" text-anchor="middle" fill="#fff" font-family="Helvetica,Arial,sans-serif" font-size="40" font-weight="900">H</text></svg>`
-const ADMIN_FAVICON_URI = `data:image/svg+xml;utf8,${encodeURIComponent(ADMIN_FAVICON_SVG)}`
-
+// 作り方の例(Mac):
+//   1. https://honeking.jp/wp/wp-content/themes/honeking/assets/img/favicon/honeking/favicon-32x32.png を保存
+//   2. Preview.app で開く → 「ツール → カラーを調整 → 彩度を 0 に」→ エクスポート
+//   3. public/admin-favicon-32.png として保存
+//   4. apple-touch-icon.png も同じ手順で grayscale 化して public/admin-favicon-180.png に保存
+//
+// PNG が未配置の間は管理画面のタブにファビコンが出ない(空 or ブラウザのデフォルト)。
+// 配置すれば即反映(ブラウザのキャッシュクリアが必要な場合は Cmd+Shift+R)。
 useHead({
   titleTemplate: title => title ? `${title} | honeking 管理画面` : 'honeking 管理画面',
   link: [
-    // nuxt.config.ts で定義したカラー版を上書き(管理画面だけモノクロ)。
-    // SVG ファビコンに対応する modern browser はこの一行だけで全サイズ対応。
-    { rel: 'icon', type: 'image/svg+xml', href: ADMIN_FAVICON_URI },
-    { rel: 'apple-touch-icon', sizes: '180x180', href: ADMIN_FAVICON_URI },
-    // 旧ブラウザ用の PNG リンクも SVG にする(Safari 等が PNG 必須にしているケースをカバー)。
-    { rel: 'icon', type: 'image/png', sizes: '32x32', href: ADMIN_FAVICON_URI, key: 'favicon-32' },
-    { rel: 'icon', type: 'image/png', sizes: '16x16', href: ADMIN_FAVICON_URI, key: 'favicon-16' },
+    // nuxt.config.ts で定義したカラー版を上書き
+    { rel: 'icon', type: 'image/png', sizes: '32x32', href: '/admin-favicon-32.png' },
+    { rel: 'icon', type: 'image/png', sizes: '16x16', href: '/admin-favicon-32.png' },
+    { rel: 'apple-touch-icon', sizes: '180x180', href: '/admin-favicon-180.png' },
   ],
 })
 

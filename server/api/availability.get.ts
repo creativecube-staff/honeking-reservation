@@ -1,3 +1,4 @@
+import { MAX_ADVANCE_DAYS } from '~~/shared/reservationPolicy'
 import { prisma } from '../utils/prisma'
 
 // お客様側: 指定店舗・指定メニューの空き枠を期間で返す。
@@ -50,6 +51,15 @@ export default defineEventHandler(async (event) => {
   if (fromDate > toDate) throw createError({ statusCode: 400, statusMessage: 'from は to 以前' })
   const dayDiff = Math.round((toDate.getTime() - fromDate.getTime()) / 86400000)
   if (dayDiff > 60) throw createError({ statusCode: 400, statusMessage: '期間は 60 日以内' })
+
+  // 受付上限を超える期間は弾く(UI 側で disabled にしているが、直叩き対策)。
+  const todayUtc = new Date()
+  todayUtc.setUTCHours(0, 0, 0, 0)
+  const maxAllowed = new Date(todayUtc)
+  maxAllowed.setUTCDate(maxAllowed.getUTCDate() + MAX_ADVANCE_DAYS - 1)
+  if (fromDate > maxAllowed) {
+    throw createError({ statusCode: 400, statusMessage: `ご予約は本日から ${MAX_ADVANCE_DAYS} 日先までお受けしております` })
+  }
 
   const store = await prisma.store.findUnique({
     where: { slug },

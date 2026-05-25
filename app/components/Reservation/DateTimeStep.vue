@@ -1,5 +1,6 @@
 <script setup lang="ts">
 // 予約フロー(SPA) ステップ 2/3: 日時選択(時刻×曜日グリッド)
+import { MAX_ADVANCE_DAYS } from '~~/shared/reservationPolicy'
 type Store = {
   id: number
   slug: string
@@ -60,6 +61,12 @@ const offsetYmd = ref<string>(todayYmd())
 
 const rangeFrom = computed(() => offsetYmd.value)
 const rangeTo = computed(() => addDays(offsetYmd.value, WEEK_DAYS - 1))
+
+// 予約可能な最終日(今日 + MAX_ADVANCE_DAYS - 1)。
+// 「次の週 →」を押したとき rangeFrom が maxRangeFrom を超えないように制限する。
+const maxLastYmd = computed(() => addDays(todayYmd(), MAX_ADVANCE_DAYS - 1))
+const maxRangeFrom = computed(() => addDays(maxLastYmd.value, -(WEEK_DAYS - 1)))
+const canGoNext = computed(() => rangeFrom.value < maxRangeFrom.value)
 
 const { data: availability, status, error: availError } = await useFetch<DayAvail[]>('/api/availability', {
   query: computed(() => ({
@@ -245,13 +252,22 @@ function dayClosedReason(day: DayAvail): string | null {
         </button>
         <button
           type="button"
-          class="px-3 py-1.5 text-sm rounded-md border border-slate-300 bg-white hover:bg-slate-50 cursor-pointer"
+          class="px-3 py-1.5 text-sm rounded-md border border-slate-300 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+          :disabled="!canGoNext"
           @click="shiftRange(WEEK_DAYS)"
         >
           次の週 →
         </button>
       </div>
     </div>
+
+    <p
+      v-if="!canGoNext"
+      class="-mt-1 mb-3 text-xs text-slate-500 inline-flex items-center gap-1"
+    >
+      <UIcon name="i-lucide-info" class="size-3.5 text-slate-400" />
+      ご予約は本日から {{ MAX_ADVANCE_DAYS }} 日先までお受けしております
+    </p>
 
     <UAlert
       v-if="availError"

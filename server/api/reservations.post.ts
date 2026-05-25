@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client'
 import { createReservationSchema } from '../../shared/schemas/reservation'
+import { MAX_ADVANCE_DAYS } from '../../shared/reservationPolicy'
 import { decryptUtf8, encryptUtf8 } from '../utils/crypto'
 import { hashEmail, hashName, hashPhone } from '../utils/hash'
 import { prisma } from '../utils/prisma'
@@ -75,6 +76,18 @@ export default defineEventHandler(async (event) => {
   }
   if (startAt.getTime() <= Date.now()) {
     throw createError({ statusCode: 400, statusMessage: '過去の時間は予約できません' })
+  }
+
+  // 受付上限を超える予約は拒否(UI で disabled しているが API 直叩き対策)。
+  // 上限 = 今日(UTC) + MAX_ADVANCE_DAYS - 1 の 23:59:59
+  const maxAdvanceEnd = new Date()
+  maxAdvanceEnd.setUTCHours(0, 0, 0, 0)
+  maxAdvanceEnd.setUTCDate(maxAdvanceEnd.getUTCDate() + MAX_ADVANCE_DAYS)
+  if (startAt.getTime() >= maxAdvanceEnd.getTime()) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: `ご予約は本日から ${MAX_ADVANCE_DAYS} 日先までお受けしております`,
+    })
   }
 
   // メニュー表示期間

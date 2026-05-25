@@ -8,26 +8,29 @@ const { user, fetch: fetchSession, clear: clearSession } = useUserSession()
 
 // 管理画面共通のタイトル・ファビコン上書き。
 // - タイトル: 各ページが useHead で上書きしない場合のデフォルト。
-// - ファビコン: 既存の honeking.jp 本体のファビコン(カラー版)を SVG <image> で参照し、
-//   feColorMatrix で grayscale 化したものを data URI で読ませる(管理画面はモノクロブランド)。
-//   元画像をフェッチしないので CORS の問題も起きない(SVG 内部で参照するだけ)。
-const FAVICON_SRC_32 = 'https://honeking.jp/wp/wp-content/themes/honeking/assets/img/favicon/honeking/favicon-32x32.png'
-const FAVICON_SRC_180 = 'https://honeking.jp/wp/wp-content/themes/honeking/assets/img/favicon/honeking/apple-touch-icon.png'
-
-function monoSvgDataUri(srcUrl: string, size: number): string {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}"><defs><filter id="g"><feColorMatrix type="matrix" values="0.3 0.59 0.11 0 0  0.3 0.59 0.11 0 0  0.3 0.59 0.11 0 0  0 0 0 1 0"/></filter></defs><image href="${srcUrl}" width="${size}" height="${size}" filter="url(#g)"/></svg>`
-  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`
-}
+// - ファビコン: モノクロの管理画面ブランド用。
+//
+// 設計: 当初は honeking.jp 本体のカラーファビコンを SVG <image href> で参照して
+// feColorMatrix で grayscale 化していたが、ブラウザのセキュリティ制限で
+// data URI 内の <image href="https://外部"> は読まれないため非表示になっていた。
+// 代わりに「黒地に白い H」の純 SVG を埋め込み、外部参照なしで確実に表示させる。
+//
+// もし「実ロゴを grayscale 化した PNG を使いたい」場合は、
+// public/admin-favicon-32.png / admin-favicon-180.png を置いて、
+// 下記の inline SVG の代わりに { href: '/admin-favicon-32.png' } のように差し替える。
+const ADMIN_FAVICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#1d2327"/><text x="32" y="46" text-anchor="middle" fill="#fff" font-family="Helvetica,Arial,sans-serif" font-size="40" font-weight="900">H</text></svg>`
+const ADMIN_FAVICON_URI = `data:image/svg+xml;utf8,${encodeURIComponent(ADMIN_FAVICON_SVG)}`
 
 useHead({
   titleTemplate: title => title ? `${title} | honeking 管理画面` : 'honeking 管理画面',
   link: [
-    // nuxt.config.ts で定義したカラー版を上書き(管理画面だけモノクロ)
-    { rel: 'icon', type: 'image/svg+xml', href: monoSvgDataUri(FAVICON_SRC_32, 32) },
-    { rel: 'apple-touch-icon', sizes: '180x180', href: monoSvgDataUri(FAVICON_SRC_180, 180) },
-    // 旧ブラウザ用の PNG/ICO は明示的に外す(同 rel/sizes だと Nuxt がマージしないので key で識別)
-    { rel: 'icon', type: 'image/png', sizes: '32x32', href: monoSvgDataUri(FAVICON_SRC_32, 32), key: 'favicon-32' },
-    { rel: 'icon', type: 'image/png', sizes: '16x16', href: monoSvgDataUri(FAVICON_SRC_32, 16), key: 'favicon-16' },
+    // nuxt.config.ts で定義したカラー版を上書き(管理画面だけモノクロ)。
+    // SVG ファビコンに対応する modern browser はこの一行だけで全サイズ対応。
+    { rel: 'icon', type: 'image/svg+xml', href: ADMIN_FAVICON_URI },
+    { rel: 'apple-touch-icon', sizes: '180x180', href: ADMIN_FAVICON_URI },
+    // 旧ブラウザ用の PNG リンクも SVG にする(Safari 等が PNG 必須にしているケースをカバー)。
+    { rel: 'icon', type: 'image/png', sizes: '32x32', href: ADMIN_FAVICON_URI, key: 'favicon-32' },
+    { rel: 'icon', type: 'image/png', sizes: '16x16', href: ADMIN_FAVICON_URI, key: 'favicon-16' },
   ],
 })
 

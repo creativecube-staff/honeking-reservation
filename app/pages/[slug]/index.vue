@@ -87,6 +87,33 @@ async function onIndicatorNavigate(stepId: 1 | 2 | 3 | 4) {
   if (stepId === 2) goTo('menu')
   else if (stepId === 3) goTo('datetime')
 }
+
+// LINE Login など外部リダイレクト経由で戻ってきた場合の予約フロー復元。
+// AuthModal が sessionStorage に保存した state を読み、メニューと開始時刻を復元してステップ3にジャンプする。
+// セッションキーは AuthModal と一致させること。
+const RESUME_KEY = 'honeking_pending_reservation'
+// 30 分以上経過した state は破棄(古い予約意図を勝手に復元しないため)
+const RESUME_TTL_MS = 30 * 60 * 1000
+
+onMounted(() => {
+  if (!import.meta.client) return
+  const raw = sessionStorage.getItem(RESUME_KEY)
+  if (!raw) return
+  sessionStorage.removeItem(RESUME_KEY)
+  try {
+    const saved = JSON.parse(raw) as { slug: string, menuId: number, startAt: string, savedAt?: number }
+    if (saved.slug !== slug.value) return
+    if (saved.savedAt && Date.now() - saved.savedAt > RESUME_TTL_MS) return
+    const m = (menus.value ?? []).find(x => x.id === saved.menuId)
+    if (!m) return
+    selectedMenu.value = m
+    selectedStartAt.value = saved.startAt
+    step.value = 'confirm'
+  }
+  catch {
+    // 壊れた JSON は無視
+  }
+})
 </script>
 
 <template>

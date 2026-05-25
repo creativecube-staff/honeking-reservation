@@ -131,14 +131,15 @@ export type LineIdTokenPayload = {
 
 /** id_token を LINE の verify エンドポイントで検証 + ペイロード取得。
  *  ローカルで JWT を検証してもよいが、verify エンドポイント経由が公式推奨かつ実装が単純。
+ *  nonce は OAuth リダイレクトフロー時のみ渡す(LIFF SDK 経由の場合は SDK 内で管理済みのため省略)。
  */
-export async function verifyIdToken(idToken: string, nonce: string): Promise<LineIdTokenPayload> {
+export async function verifyIdToken(idToken: string, nonce?: string): Promise<LineIdTokenPayload> {
   const cfg = getLineLoginConfig()
   const body = new URLSearchParams({
     id_token: idToken,
     client_id: cfg.channelId,
-    nonce,
   })
+  if (nonce) body.set('nonce', nonce)
   const res = await fetch(VERIFY_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },

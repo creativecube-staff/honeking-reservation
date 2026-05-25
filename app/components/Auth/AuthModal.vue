@@ -5,8 +5,109 @@
 interface Props {
   open: boolean
   initialTab?: 'login' | 'signup'
+  // LINE Login 後に予約フロー SPA を復元するための情報。
+  // 渡された場合、LINE ボタン押下時に sessionStorage に保存して、
+  // 認証完了後 /[slug] に戻ったとき onMounted で確認ステップまでジャンプする。
+  resumeState?: {
+    slug: string
+    menuId: number
+    startAt: string // "YYYY-MM-DDTHHMM"
+  } | null
 }
-const props = withDefaults(defineProps<Props>(), { initialTab: 'login' })
+const props = withDefaults(defineProps<Props>(), { initialTab: 'login', resumeState: null })
+
+// 予約フロー復元用 sessionStorage キー（[slug]/index.vue 側で同じキーを参照）
+const RESUME_KEY = 'honeking_pending_reservation'
+
+const liff = useLiff()
+const router = useRouter()
+const { refresh: refreshMemberForLiff } = useMember()
+const lineProcessing = ref(false)
+const lineError = ref<string | null>(null)
+
+/** LINE ログイン開始。LIFF webview なら SDK 経由(リダイレクトなし)、
+ *  PC ブラウザ等は従来の OAuth リダイレクトに自動フォールバック。 */
+async function goLineLogin() {
+  if (!import.meta.client) return
+  if (lineProcessing.value) return
+  lineError.value = null
+
+  // 予約フロー復元用ステートを sessionStorage に保存(OAuth リダイレクト経由でも復帰できるように)
+  if (props.resumeState) {
+    try {
+      sessionStorage.setItem(RESUME_KEY, JSON.stringify({
+        ...props.resumeState,
+        savedAt: Date.now(),
+      }))
+    }
+    catch {
+      // sessionStorage 無効でも続行
+    }
+  }
+  const redirectPath = props.resumeState ? `/${props.resumeState.slug}` : '/'
+
+  // LIFF SDK が利用可能なら、webview/PC 問わず liff.login() に任せる(SDK が最適な動作を選ぶ)
+  const liffOk = await liff.isReady()
+  if (liffOk) {
+    lineProcessing.value = true
+    try {
+      const loggedIn = await liff.isLoggedIn()
+      if (!loggedIn) {
+        // SDK が webview なら内部完結、外部ブラウザなら OAuth リダイレクト。
+        // どちらの場合も、戻ってきたら自動で isLoggedIn() = true になる。
+        // redirectUri は LIFF の Endpoint URL と同じオリジンの絶対 URL を指定。
+        const origin = window.location.origin
+        await liff.login({ redirectUri: `${origin}${redirectPath}` })
+        // redirect する場合はこの行に到達しない
+        return
+      }
+      const idToken = await liff.getIdToken()
+      if (!idToken) {
+        // LIFF からは login したのに id_token が無い場合のフォールバック
+        lineProcessing.value = false
+        window.location.href = `/api/auth/line/start?redirect=${encodeURIComponent(redirectPath)}`
+        return
+      }
+      const res = await $fetch<{ status: 'logged-in' | 'need-link' | 'need-signup' | 'linked' | 'conflict' }>(
+        '/api/auth/line/liff-login',
+        {
+          method: 'POST',
+          body: { idToken, redirectAfter: redirectPath },
+        },
+      )
+      if (res.status === 'logged-in' || res.status === 'linked') {
+        await refreshMemberForLiff()
+        emit('logged-in')
+        close()
+        return
+      }
+      if (res.status === 'need-link') {
+        await router.push('/auth/line/link')
+        return
+      }
+      if (res.status === 'need-signup') {
+        await router.push('/auth/line/signup')
+        return
+      }
+      if (res.status === 'conflict') {
+        lineError.value = 'この LINE アカウントは別の会員に既に連携されています。'
+      }
+    }
+    catch (e) {
+      console.error('[AuthModal] LIFF login flow failed:', (e as Error).message)
+      // SDK 経由がダメだった場合の最後の保険として OAuth リダイレクトに逃がす
+      window.location.href = `/api/auth/line/start?redirect=${encodeURIComponent(redirectPath)}`
+      return
+    }
+    finally {
+      lineProcessing.value = false
+    }
+    return
+  }
+
+  // LIFF が使えない(LIFF_ID 未設定など)→ 従来の OAuth リダイレクト
+  window.location.href = `/api/auth/line/start?redirect=${encodeURIComponent(redirectPath)}`
+}
 
 const emit = defineEmits<{
   'update:open': [value: boolean]
@@ -198,8 +299,35 @@ async function onSignup() {
               </div>
             </div>
 
+            <!-- LINE で続行(両タブ共通の最上部) -->
+            <div class="px-5 pt-4">
+              <UAlert
+                v-if="lineError"
+                color="error"
+                icon="i-lucide-triangle-alert"
+                :title="lineError"
+                class="mb-3"
+              />
+              <button
+                type="button"
+                :disabled="lineProcessing"
+                class="w-full inline-flex items-center justify-center gap-2 py-3 text-base font-bold text-white bg-[#06C755] hover:bg-[#05a647] disabled:opacity-60 rounded-lg shadow-sm transition cursor-pointer"
+                @click="goLineLogin"
+              >
+                <svg viewBox="0 0 24 24" class="size-5" fill="currentColor" aria-hidden="true">
+                  <path d="M19.365 9.863c.349 0 .63.285.63.631 0 .345-.281.63-.63.63H17.61v1.125h1.755c.349 0 .63.283.63.63 0 .344-.281.629-.63.629h-2.386c-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.63-.63h2.386c.346 0 .627.285.627.63 0 .349-.281.63-.63.63H17.61v1.125h1.755zm-3.855 3.016c0 .27-.174.51-.432.596-.064.021-.133.031-.199.031-.211 0-.391-.09-.51-.25l-2.443-3.317v2.94c0 .344-.279.629-.631.629-.346 0-.626-.285-.626-.629V8.108c0-.27.173-.51.43-.595.06-.023.136-.033.194-.033.195 0 .375.104.495.254l2.462 3.33V8.108c0-.345.282-.63.63-.63.345 0 .63.285.63.63v4.771zm-5.741 0c0 .344-.282.629-.631.629-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.63-.63.346 0 .628.285.628.63v4.771zm-2.466.629H4.917c-.345 0-.63-.285-.63-.629V8.108c0-.345.285-.63.63-.63.348 0 .63.285.63.63v4.141h1.756c.348 0 .629.283.629.63 0 .344-.282.629-.629.629M24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314" />
+                </svg>
+                {{ activeTab === 'login' ? 'LINE でログイン' : 'LINE で登録' }}
+              </button>
+              <div class="flex items-center gap-3 my-3">
+                <div class="flex-1 h-px bg-slate-200" />
+                <span class="text-xs text-slate-500">または</span>
+                <div class="flex-1 h-px bg-slate-200" />
+              </div>
+            </div>
+
             <!-- ログインタブ -->
-            <div v-if="activeTab === 'login'" class="p-5">
+            <div v-if="activeTab === 'login'" class="p-5 pt-0">
               <p class="text-sm text-slate-600 mb-4">
                 会員登録時のメールアドレスとパスワードを入力してください。
               </p>
@@ -270,7 +398,7 @@ async function onSignup() {
             </div>
 
             <!-- 新規登録タブ -->
-            <div v-else class="p-5">
+            <div v-else class="p-5 pt-0">
               <!-- 送信完了表示 -->
               <div v-if="signupSent" class="rounded-xl border-2 border-orange-300 bg-orange-50 p-5 text-center">
                 <UIcon name="i-lucide-mail-check" class="size-10 text-orange-600 mx-auto mb-2" />

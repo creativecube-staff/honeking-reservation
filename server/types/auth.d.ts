@@ -35,6 +35,9 @@ declare module '#auth-utils' {
     // 既存 Customer のメアドにヒットした場合の Customer ID（link フローでパスワード本人確認に使う）。
     matchedCustomerId?: number
     issuedAt: string
+    // 連携/登録完了後にリダイレクトすべき先（予約フローの SPA に戻すための導線）。
+    // 同一オリジン内の絶対パス（"/" 始まり）のみ許可。
+    redirectAfter?: string
   }
 
   interface UserSession {

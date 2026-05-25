@@ -38,6 +38,8 @@ export default defineEventHandler(async (event) => {
       hasEmail: !!pending.email,
       // ヒットした既存会員の表示情報（紐付けフロー専用）
       matched,
+      // 完了後のリダイレクト先（予約フローへの復帰用、同一オリジン絶対パスのみ）
+      redirectAfter: pending.redirectAfter && pending.redirectAfter.startsWith('/') ? pending.redirectAfter : null,
     },
   }
 })

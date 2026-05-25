@@ -20,6 +20,7 @@ type Pending = {
   lineDisplayName: string | null
   hasEmail: boolean
   matched: { maskedEmail: string | null, name: string } | null
+  redirectAfter: string | null
 }
 
 const { data, pending } = await useFetch<{ pending: Pending | null }>('/api/auth/line/pending', {
@@ -83,9 +84,10 @@ async function onSubmit() {
       },
     })
     if (res.verified) {
-      // LINE 提供メアドと一致 → 即ログイン完了
+      // LINE 提供メアドと一致 → 即ログイン完了。予約フローからの呼び出しなら戻す。
       await refreshMember()
-      await router.push('/me')
+      const dest = data.value?.pending?.redirectAfter || '/me'
+      await router.push(dest)
     }
     else {
       submitted.value = 'mail-sent'

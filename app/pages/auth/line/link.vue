@@ -18,6 +18,7 @@ type Pending = {
   lineDisplayName: string | null
   hasEmail: boolean
   matched: { maskedEmail: string | null, name: string } | null
+  redirectAfter: string | null
 }
 
 const { data, pending, refresh } = await useFetch<{ pending: Pending | null }>('/api/auth/line/pending', {
@@ -49,7 +50,9 @@ async function onSubmit() {
       body: { password: password.value },
     })
     await refreshMember()
-    await router.push('/me')
+    // 予約フローからの呼び出しなら元の SPA に戻す。それ以外は /me。
+    const dest = data.value?.pending?.redirectAfter || '/me'
+    await router.push(dest)
   }
   catch (e) {
     const err = e as { statusMessage?: string, data?: { statusMessage?: string } }

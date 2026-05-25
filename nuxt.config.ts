@@ -20,6 +20,18 @@ export default defineNuxtConfig({
       ],
     },
   },
+  // Vite が runtime 中に `@line/liff` を新規依存として発見すると pre-bundle が走り、
+  // ブラウザが強制リロードされて SPA ステートが飛ぶ。事前 include で安定化する。
+  vite: {
+    optimizeDeps: {
+      include: ['@line/liff'],
+    },
+    // dev 時のみ、外部トンネル経由（cloudflared / ngrok）で LIFF 確認するために外部 Host を許可。
+    // 各サービスのサブドメイン全部を許可する書き方（先頭ドット）。本番ビルドには影響しない。
+    server: {
+      allowedHosts: ['.trycloudflare.com', '.ngrok-free.app', '.ngrok.app', '.ngrok.io'],
+    },
+  },
   // セッション Cookie 設定
   // dev: LAN IP (192.168.x.x) で HTTP アクセスする際に Cookie を送れるよう secure=false
   // prod: .env で `NUXT_SESSION_COOKIE_SECURE=true` を必ず設定すること（HTTPS 必須）
@@ -28,6 +40,12 @@ export default defineNuxtConfig({
       cookie: {
         secure: false,
       },
+    },
+    // クライアントから参照可能な公開 runtimeConfig。
+    // - liffId: LINE Front-end Framework の LIFF アプリ ID（公開情報・OK）。
+    //          .env の NUXT_PUBLIC_LIFF_ID で上書きされる。
+    public: {
+      liffId: '',
     },
   },
 })

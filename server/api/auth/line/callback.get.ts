@@ -135,6 +135,7 @@ export default defineEventHandler(async (event) => {
   }
 
   // pendingLineLink を session に保存（既存セッションがあれば温存）
+  // redirectAfter は link/signup フロー完了後に戻す先（予約フロー SPA への復帰用）。
   const current = await getUserSession(event)
   await setUserSession(event, {
     ...current,
@@ -144,6 +145,7 @@ export default defineEventHandler(async (event) => {
       email: lineEmail,
       matchedCustomerId,
       issuedAt: new Date().toISOString(),
+      redirectAfter: redirectAfter !== '/' ? redirectAfter : undefined,
     },
   })
 

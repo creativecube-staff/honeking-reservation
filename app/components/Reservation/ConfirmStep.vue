@@ -463,10 +463,16 @@ async function onSubmit() {
       </form>
     </div>
 
-    <!-- 認証モーダル(ログイン / 新規登録) -->
+    <!-- 認証モーダル(ログイン / 新規登録 / LINE) -->
+    <!-- resume-state を渡すと LINE ボタン押下時に予約フローへの復帰用 sessionStorage を保存する -->
     <AuthModal
       v-model:open="authModalOpen"
       :initial-tab="authModalTab"
+      :resume-state="{
+        slug: store.slug,
+        menuId: menu.id,
+        startAt: startAt,
+      }"
     />
   </div>
 </template>

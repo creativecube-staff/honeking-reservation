@@ -16,8 +16,8 @@
 // ★本番公開前に行政書士・弁護士のチェックを推奨。
 useHead({ title: "プライバシーポリシー | ほねキング整骨院 予約" });
 
-const POLICY_VERSION = "v2.0-2026-05-13";
-const LAST_UPDATED = "2026年5月13日";
+const POLICY_VERSION = "v2.1-2026-05-25";
+const LAST_UPDATED = "2026年5月25日";
 </script>
 
 <template>
@@ -98,13 +98,23 @@ const LAST_UPDATED = "2026年5月13日";
         </div>
         <div>
           <p class="font-semibold text-slate-900">
-            (5) 将来的に取得する可能性のある情報
+            (5) 外部サービス（LINE）との連携により取得する情報
           </p>
+          <p class="mt-1">
+            お客様が本サービスの会員登録またはログインに際して LINE
+            アカウントによる連携（LINE Login）を選択された場合、お客様の同意のもと、LINE
+            株式会社から以下の情報を取得します。
+          </p>
+          <ul class="list-disc list-inside mt-1 space-y-1">
+            <li>LINE ユーザー識別子（LINE が当サービス向けに発行する一意の ID）</li>
+            <li>LINE プロフィール表示名</li>
+            <li>
+              LINE 登録メールアドレス（お客様が当該情報の提供に同意した場合に限ります）
+            </li>
+          </ul>
           <p class="mt-1 text-sm text-slate-600">
-            本サービスが LINE
-            その他の外部サービスとのログイン連携機能を提供する場合、当該外部サービスから取得する識別子（ユーザー
-            ID
-            等）および任意で提供される情報（表示名等）を取得することがあります。この場合、追加で本ポリシーを改定し、取得項目を明示します。
+            ※ LINE
+            連携はお客様の任意であり、連携しない場合でも従来のメールアドレス・パスワードによる会員登録・ログインをご利用いただけます。連携の解除はマイページからいつでも行うことができます。
           </p>
         </div>
       </div>
@@ -125,7 +135,7 @@ const LAST_UPDATED = "2026年5月13日";
         <li>電話・メールその他の方法による直接のお申し出</li>
         <li>本サービスの利用に伴う自動取得（Cookie・アクセスログ等）</li>
         <li>
-          外部サービスとの連携によりお客様の同意のもとに当該外部サービスから取得
+          外部サービスとの認証連携（LINE Login（OAuth 2.0））により、お客様の同意のもとに LINE 株式会社から取得
         </li>
       </ul>
     </section>
@@ -143,6 +153,12 @@ const LAST_UPDATED = "2026年5月13日";
         <li>ご予約・施術に関するご連絡（電話・メール）</li>
         <li>会員登録のためのメール認証および本人確認</li>
         <li>会員ログイン・会員機能の提供・パスワード再設定</li>
+        <li>
+          LINE アカウントによる会員認証および当社サービス上の会員アカウントとの紐付け
+        </li>
+        <li>
+          将来的に LINE プッシュメッセージ等による通知を実施する場合における通知の送信（当該機能の提供にあたってはお客様の追加の同意を取得します）
+        </li>
         <li>
           会員向けのお知らせ・キャンペーン情報の送信（会員が事前に同意した場合に限ります）
         </li>
@@ -245,10 +261,17 @@ const LAST_UPDATED = "2026年5月13日";
               <td class="px-3 py-2 border-b border-slate-200">日本</td>
             </tr>
             <tr>
-              <td class="px-3 py-2">
+              <td class="px-3 py-2 border-b border-slate-200">
                 本サービスを稼働させる VPS（仮想専用サーバ）事業者
               </td>
-              <td class="px-3 py-2">本サービスのアプリケーションサーバ運用</td>
+              <td class="px-3 py-2 border-b border-slate-200">本サービスのアプリケーションサーバ運用</td>
+              <td class="px-3 py-2 border-b border-slate-200">日本</td>
+            </tr>
+            <tr>
+              <td class="px-3 py-2">LINE 株式会社</td>
+              <td class="px-3 py-2">
+                LINE Login による会員認証連携の提供（お客様が当該連携機能をご利用になる場合に限ります）
+              </td>
               <td class="px-3 py-2">日本</td>
             </tr>
           </tbody>
@@ -257,6 +280,15 @@ const LAST_UPDATED = "2026年5月13日";
       <p class="mt-3 text-xs text-slate-500">
         ※
         委託先は本サービスの仕様・運用変更に応じて変更されることがあります。重要な変更があった場合は本ポリシーを改定し本ページに掲示します。
+      </p>
+      <p class="mt-2 text-xs text-slate-500">
+        ※ LINE 株式会社による LINE Login
+        サービスの提供にあたって取得・利用される情報の取扱いについては、同社が定める <a
+          href="https://terms2.line.me/LINE_Privacy_Policy?lang=ja"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="text-orange-700 underline"
+        >LINE プライバシーポリシー</a> をご参照ください。
       </p>
     </section>
 

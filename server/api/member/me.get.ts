@@ -13,7 +13,16 @@ export default defineEventHandler(async (event) => {
 
   const c = await prisma.customer.findUnique({
     where: { id: session.member.id },
-    select: { id: true, name: true, phone: true, email: true, emailVerifiedAt: true, lastLoginAt: true },
+    select: {
+      id: true,
+      name: true,
+      phone: true,
+      email: true,
+      emailVerifiedAt: true,
+      lastLoginAt: true,
+      lineUserId: true,
+      lineDisplayName: true,
+    },
   })
   if (!c || !c.emailVerifiedAt) {
     // セッションは残ってるが DB 側で退会または未認証化された → セッション破棄
@@ -32,6 +41,9 @@ export default defineEventHandler(async (event) => {
       phone: c.phone ? decryptUtf8(c.phone) : null,
       email: c.email ? decryptUtf8(c.email) : null,
       lastLoginAt: c.lastLoginAt?.toISOString() ?? null,
+      // LINE 連携状態
+      lineLinked: !!c.lineUserId,
+      lineDisplayName: c.lineDisplayName ?? null,
     },
   }
 })

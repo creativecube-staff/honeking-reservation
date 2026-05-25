@@ -30,14 +30,79 @@ const STORES = [
 ];
 
 // 共通メニュー（storeId IS NULL で投入。全店舗で自動利用可能）
-// 店舗特別メニューは管理画面から店舗ごとに追加する。初期は空。
 const COMMON_MENUS = [
-  { name: '全身整体 30 分', durationMinutes: 30, priceJpy: 4000, displayOrder: 1 },
-  { name: '全身整体 60 分', durationMinutes: 60, priceJpy: 7000, displayOrder: 2 },
-  { name: '部分整体（肩・腰） 30 分', durationMinutes: 30, priceJpy: 3500, displayOrder: 3 },
-  { name: '骨盤矯正 60 分', durationMinutes: 60, priceJpy: 8000, displayOrder: 4 },
-  { name: 'マッサージ 60 分', durationMinutes: 60, priceJpy: 6000, displayOrder: 5 },
+  {
+    name: '全身整体 30 分',
+    description: '肩・腰・骨盤の主要なゆがみを 30 分でスピーディに調整。お仕事帰りや昼休みのリフレッシュにおすすめです。',
+    durationMinutes: 30,
+    priceJpy: 4000,
+    displayOrder: 1,
+  },
+  {
+    name: '全身整体 60 分',
+    description: '全身をじっくり整えるスタンダードコース。慢性的な肩こり・腰痛・自律神経の乱れにお悩みの方に。',
+    durationMinutes: 60,
+    priceJpy: 7000,
+    displayOrder: 2,
+  },
+  {
+    name: '部分整体（肩・腰） 30 分',
+    description: '気になる部位をピンポイントで集中ケア。デスクワークによる肩こり・ぎっくり腰の予防に。',
+    durationMinutes: 30,
+    priceJpy: 3500,
+    displayOrder: 3,
+  },
+  {
+    name: '骨盤矯正 60 分',
+    description: '産後・反り腰・猫背でお悩みの方へ。骨盤を中心に下半身のバランスを根本から整えます。',
+    durationMinutes: 60,
+    priceJpy: 8000,
+    displayOrder: 4,
+  },
+  {
+    name: 'マッサージ 60 分',
+    description: '筋肉のこり・疲労を全身からじっくりほぐす、リラクゼーション中心のコース。',
+    durationMinutes: 60,
+    priceJpy: 6000,
+    displayOrder: 5,
+  },
 ];
+
+// 店舗特別メニュー（storeId 紐付け。slug で店舗を引いて差し込む）
+// オープン記念キャンペーンなど期間限定メニューは availableUntil を入れる。
+const SPECIAL_MENUS = {
+  otakanomori: [
+    {
+      name: 'ヘッドスパ 30 分',
+      description: '頭皮と首まわりを丁寧にほぐす整骨院ならではの特別メニュー。眼精疲労・PC 作業による頭痛・寝つきの悪さが気になる方に。',
+      durationMinutes: 30,
+      priceJpy: 3800,
+      displayOrder: 1,
+    },
+    {
+      name: 'スポーツケア 60 分',
+      description: 'ランナー・ジム通いの方向け。筋膜リリースとストレッチを組み合わせた競技後・トレーニング後のリカバリーコース。',
+      durationMinutes: 60,
+      priceJpy: 7500,
+      displayOrder: 2,
+    },
+    {
+      name: 'マタニティ整体 40 分',
+      description: '妊娠中の腰痛・むくみ・恥骨痛をやさしくケア。妊娠周期に合わせて専用クッションを使用、専門研修を受けた施術者が担当します。',
+      durationMinutes: 40,
+      priceJpy: 5500,
+      displayOrder: 3,
+    },
+    {
+      name: 'オープン記念キャンペーン 全身整体 60 分',
+      description: '【期間限定】流山おおたかの森店オープンを記念した特別価格コース。通常 ¥7,000 のところを ¥5,000 でご提供。お一人さま 1 回限り。',
+      durationMinutes: 60,
+      priceJpy: 5000,
+      displayOrder: 4,
+      availableUntil: '2026-06-30',
+    },
+  ],
+};
 
 // 営業時間レンジ(両店共通)
 // 1 日に複数レンジを持てる。中抜け休憩は 2 つのレンジで表現。
@@ -121,11 +186,20 @@ const PUBLIC_HOLIDAYS = [
 
 async function main() {
   console.log('🧹 既存データをクリーンアップ...');
-  // 削除順序は依存関係の逆
+  // 削除順序は依存関係の逆(子→親)
+  await prisma.voucherUsage.deleteMany();
+  await prisma.reservationHistory.deleteMany();
+  await prisma.productSale.deleteMany();
+  await prisma.customerVoucher.deleteMany();
+  await prisma.product.deleteMany();
+  await prisma.emailVerificationToken.deleteMany();
+  await prisma.passwordResetToken.deleteMany();
+  await prisma.emailChangeToken.deleteMany();
   await prisma.reservation.deleteMany();
   await prisma.customer.deleteMany();
   await prisma.shift.deleteMany();
   await prisma.publicHoliday.deleteMany();
+  await prisma.closure.deleteMany();
   await prisma.holiday.deleteMany();
   await prisma.businessHour.deleteMany();
   await prisma.menu.deleteMany();
@@ -173,6 +247,25 @@ async function main() {
   console.log('📋 共通メニュー（全店舗で利用可能）を投入...');
   for (const m of COMMON_MENUS) {
     await prisma.menu.create({ data: { ...m, storeId: null } });
+  }
+
+  console.log('🎁 店舗特別メニューを投入...');
+  for (const [slug, menus] of Object.entries(SPECIAL_MENUS)) {
+    const store = await prisma.store.findUnique({ where: { slug } });
+    if (!store) {
+      console.warn(`  ⚠️  ${slug} の店舗が見つかりませんでした(スキップ)`);
+      continue;
+    }
+    for (const m of menus) {
+      await prisma.menu.create({
+        data: {
+          ...m,
+          storeId: store.id,
+          availableFrom: m.availableFrom ? new Date(m.availableFrom) : null,
+          availableUntil: m.availableUntil ? new Date(m.availableUntil) : null,
+        },
+      });
+    }
   }
 
   console.log('🎌 国民の祝日(2026-2027)を投入...');

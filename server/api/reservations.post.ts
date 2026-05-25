@@ -1,9 +1,10 @@
 import { Prisma } from '@prisma/client'
 import { createReservationSchema } from '../../shared/schemas/reservation'
-import { encryptUtf8 } from '../utils/crypto'
+import { decryptUtf8, encryptUtf8 } from '../utils/crypto'
 import { hashEmail, hashName, hashPhone } from '../utils/hash'
 import { prisma } from '../utils/prisma'
 import { generateReservationCode } from '../utils/reservationCode'
+import { sendReservationConfirmation } from '../utils/reservationMail'
 
 // お客様側: 予約作成
 // 入力: { storeSlug, menuId, startAt: "YYYY-MM-DDTHHMM", customer: { name, phone?, email?, note? } }
@@ -176,11 +177,14 @@ export default defineEventHandler(async (event) => {
   // 会員ログイン中ならセッションから Customer を直接特定し、body の name/phone/email は無視する。
   // ゲスト予約は従来通り phone/email ハッシュで upsert する。
   let customerRow: { id: number } | null = null
+  // 完了メール用の平文(送信できなければ null のまま)
+  let recipientName: string | null = null
+  let recipientEmail: string | null = null
   const session = await getUserSession(event)
   if (session.member?.id) {
     const member = await prisma.customer.findUnique({
       where: { id: session.member.id },
-      select: { id: true, emailVerifiedAt: true },
+      select: { id: true, emailVerifiedAt: true, name: true, email: true },
     })
     if (!member || !member.emailVerifiedAt) {
       // セッションは残ってるが DB 側が無効化された
@@ -190,6 +194,15 @@ export default defineEventHandler(async (event) => {
       })
     }
     customerRow = { id: member.id }
+    try {
+      recipientName = decryptUtf8(member.name)
+      recipientEmail = member.email ? decryptUtf8(member.email) : null
+    }
+    catch {
+      // 復号失敗(暗号化キーが本番と dev で違う等)。メール送信はスキップさせる
+      recipientName = null
+      recipientEmail = null
+    }
   }
   else {
     // ゲスト予約: 既存の upsert フロー
@@ -231,6 +244,8 @@ export default defineEventHandler(async (event) => {
         throw e
       }
     }
+    recipientName = customerName
+    recipientEmail = customerEmail || null
   }
 
   // 予約作成（confirmationCode 衝突は再生成、EXCLUDE 違反は 409）
@@ -270,5 +285,29 @@ export default defineEventHandler(async (event) => {
   }
 
   const created = await createReservation()
+
+  // 完了メール送信(best-effort: 失敗しても予約は確定済なので throw しない)
+  if (recipientEmail && recipientName) {
+    try {
+      await sendReservationConfirmation({
+        customerName: recipientName,
+        customerEmail: recipientEmail,
+        store: { name: store.name, address: store.address, phone: store.phone, slug: store.slug },
+        menu: { name: menu.name, durationMinutes: menu.durationMinutes, priceJpy: menu.priceJpy },
+        startAt,
+        endAt,
+        confirmationCode: created.confirmationCode,
+        note: customer.note?.trim() || null,
+      })
+    }
+    catch (e) {
+      // メアドや本文をログに残さない方針(個人情報・トークン漏洩防止)。予約コードだけ控える
+      console.error('[reservation] 完了メール送信に失敗', {
+        reservationCode: created.confirmationCode,
+        error: (e as Error).message,
+      })
+    }
+  }
+
   return { confirmationCode: created.confirmationCode }
 })

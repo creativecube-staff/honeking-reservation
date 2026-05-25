@@ -6,7 +6,11 @@
 // 1 ファイルでホスト判定するため、layout も両者で全く違う（admin はカード型、会員はノーマル）。
 // それぞれの中身はコンポーネントに切り出し済み。
 const url = useRequestURL()
-const isAdminHost = computed(() => url.hostname.startsWith('admin.'))
+// TEMP(LAN動作確認用): IP 直アクセスもスタッフフォーム扱い。戻すときは `git checkout app/pages/login.vue`
+const isAdminHost = computed(() => {
+  const h = url.hostname
+  return h.startsWith('admin.') || /^\d{1,3}(\.\d{1,3}){3}$/.test(h)
+})
 
 // admin ホストでは default layout を無効化（admin は独自カードレイアウト）
 definePageMeta({ layout: false })

@@ -66,3 +66,19 @@ export const memberPasswordChangeSchema = z.object({
   currentPassword: z.string().min(1, '現在のパスワードを入力してください').max(200),
   newPassword: passwordSchema,
 })
+
+// LINE 経由の新規会員登録（pendingLineLink セッション + 追加入力）
+// メアドは LINE 取得 or ユーザー入力のどちらか。サーバ側で session の email を優先 / fallback で body の email を使う。
+export const lineSignupSchema = z.object({
+  email: z.string().trim().toLowerCase().email('メールアドレスの形式が正しくありません').max(200),
+  password: passwordSchema,
+  name: z.string().trim().min(1, 'お名前を入力してください').max(100),
+  phone: z.string().trim().min(1, '電話番号を入力してください').max(30),
+  agreeTerms: z.literal(true, { message: '会員規約とプライバシーポリシーへの同意が必要です' }),
+})
+export type LineSignupInput = z.infer<typeof lineSignupSchema>
+
+// LINE 経由で既存メアドに当たった場合の本人確認（パスワード入力で紐付け確定）
+export const lineLinkPasswordSchema = z.object({
+  password: z.string().min(1, 'パスワードを入力してください').max(200),
+})

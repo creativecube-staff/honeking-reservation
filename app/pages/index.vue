@@ -23,16 +23,29 @@ function hideOnError(event: Event) {
   const img = event.target as HTMLImageElement
   img.style.display = 'none'
 }
+
+// 都道府県と市区町村は別に表示するので、住所からは省く
+function shortAddress(store: StoreItem): string {
+  return store.address.replace(store.prefecture, '').replace(store.city, '').trim()
+}
 </script>
 
 <template>
   <div class="mx-auto max-w-5xl px-4 sm:px-6 py-10">
-    <h1 class="text-2xl sm:text-3xl font-bold text-slate-900">
-      ご予約・店舗選択
-    </h1>
-    <p class="text-slate-700 mt-2 mb-8">
-      ご来店希望の店舗を選択してください。
-    </p>
+    <ReservationStepIndicator :current="1" class="mb-8" />
+
+    <div class="text-center mb-10">
+      <h1 class="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
+        ご利用の<span class="text-orange-600">店舗</span>を選んでください
+      </h1>
+      <p class="mt-3 inline-flex items-center gap-1.5 text-xs sm:text-sm text-slate-700 bg-amber-50 border border-amber-200 rounded-full px-3.5 py-1.5">
+        <UIcon name="i-lucide-mouse-pointer-click" class="shrink-0 w-3.5 h-3.5 text-orange-600" />
+        タップして「メニュー選択」へ進みます
+      </p>
+      <div class="mt-4 flex justify-center">
+        <UIcon name="i-lucide-chevron-down" class="w-6 h-6 text-orange-500 animate-bounce" />
+      </div>
+    </div>
 
     <div v-if="status === 'pending'" class="text-slate-600">
       読み込み中...
@@ -52,20 +65,23 @@ function hideOnError(event: Event) {
       title="現在利用可能な店舗がありません。しばらく経ってから再度お試しください。"
     />
 
-    <div v-else class="space-y-10">
+    <div v-else class="space-y-12">
       <section v-for="group in grouped" :key="group.prefecture">
-        <h2 class="text-xl sm:text-2xl font-bold text-slate-900 border-b-2 border-amber-300 pb-2 mb-5">
-          {{ group.prefecture }}
+        <h2 class="flex items-center gap-3 mb-6">
+          <span class="block w-2 h-9 sm:h-10 rounded-full bg-orange-500" />
+          <span class="text-3xl sm:text-4xl font-bold text-slate-900 tracking-tight">
+            {{ group.prefecture }}
+          </span>
         </h2>
-        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div class="grid gap-4 md:grid-cols-2">
           <NuxtLink
             v-for="store in group.items"
             :key="store.id"
             :to="`/${store.slug}`"
             class="block group"
           >
-            <div class="h-full overflow-hidden rounded-xl border-2 border-amber-300 bg-[#fff3db] shadow-sm transition group-hover:bg-white group-hover:border-orange-500 group-hover:shadow-lg">
-              <div class="aspect-[16/9] overflow-hidden bg-amber-100">
+            <div class="h-full flex overflow-hidden rounded-xl border-2 border-amber-300 bg-[#fff3db] shadow-sm transition group-hover:bg-white group-hover:border-orange-500 group-hover:shadow-lg">
+              <div class="relative w-36 sm:w-48 shrink-0 overflow-hidden bg-amber-100">
                 <img
                   :src="imageUrl(store.slug)"
                   :alt="`${store.name} の外観`"
@@ -73,19 +89,27 @@ function hideOnError(event: Event) {
                   loading="lazy"
                   @error="hideOnError"
                 >
+                <span class="absolute top-1.5 left-1.5 rounded bg-orange-500 px-1.5 py-0.5 text-[10px] sm:text-xs font-bold text-white shadow">
+                  {{ store.city }}
+                </span>
               </div>
-              <div class="p-5">
-                <p class="text-xs text-slate-600 mb-1">{{ store.city }}</p>
-                <h3 class="text-lg sm:text-xl font-bold text-slate-900">
+              <div class="flex-1 min-w-0 p-3 sm:p-4 grid gap-1.5 content-center">
+                <h3 class="text-sm sm:text-xl font-bold text-orange-700 leading-tight whitespace-nowrap sm:whitespace-normal sm:text-balance">
                   {{ store.name }}
                 </h3>
-                <p class="mt-2 text-sm text-slate-700">{{ store.address }}</p>
-                <p v-if="store.phone" class="mt-1 text-sm text-slate-700">
-                  📞 {{ store.phone }}
-                </p>
-                <div class="mt-5 inline-flex items-center gap-1 rounded-md bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition group-hover:bg-orange-600">
+                <div class="flex items-center gap-1.5 min-w-0">
+                  <UIcon name="i-lucide-map" class="shrink-0 w-4 h-4 text-slate-500" />
+                  <p class="text-xs sm:text-sm text-slate-700 truncate">{{ shortAddress(store) }}</p>
+                </div>
+                <div v-if="store.phone" class="flex items-center gap-1.5">
+                  <UIcon name="i-lucide-phone" class="shrink-0 w-4 h-4 text-orange-600" />
+                  <span class="text-base sm:text-lg font-bold text-slate-900 tracking-wide">
+                    {{ store.phone }}
+                  </span>
+                </div>
+                <div class="mt-1 flex items-center justify-center gap-1 rounded-md bg-orange-500 px-3 py-2 text-sm font-semibold text-white shadow-sm transition group-hover:bg-orange-600">
                   この店舗で予約する
-                  <UIcon name="i-lucide-chevron-right" />
+                  <UIcon name="i-lucide-chevron-right" class="w-4 h-4" />
                 </div>
               </div>
             </div>

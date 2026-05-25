@@ -23,13 +23,15 @@ const LAST_UPDATED = '2026年5月13日'
 </script>
 
 <template>
-  <div class="mx-auto max-w-3xl px-4 sm:px-6 py-10 text-slate-800 leading-relaxed">
-    <h1 class="text-2xl sm:text-3xl font-bold text-slate-900 mb-2">
-      会員規約
-    </h1>
-    <p class="text-sm text-slate-500 mb-8">
-      最終更新日: {{ LAST_UPDATED }}（バージョン {{ TERMS_VERSION }}）
-    </p>
+  <div class="mx-auto max-w-5xl px-4 sm:px-6 py-10 text-slate-800 leading-relaxed">
+    <div class="max-w-3xl mx-auto">
+      <h1 class="text-2xl sm:text-3xl font-bold text-slate-900 mb-2 flex items-center gap-2">
+        <UIcon name="i-lucide-file-text" class="size-6 sm:size-7 text-orange-500" />
+        会員規約
+      </h1>
+      <p class="text-sm text-slate-500 mb-8">
+        最終更新日: {{ LAST_UPDATED }}（バージョン {{ TERMS_VERSION }}）
+      </p>
 
     <p class="mb-8">
       本会員規約（以下「本規約」といいます）は、株式会社 Umi&apos;ts（以下「当社」といいます）が運営する整骨院「ほねキング整骨院グループ」「海道整骨院」（以下「当院」と総称します）およびその Web 予約システム（以下「本サービス」といいます）における会員制度の利用条件を定めるものです。本サービスをご利用いただく会員（以下「会員」といいます）は、本規約に同意のうえ本サービスをご利用ください。
@@ -382,11 +384,12 @@ const LAST_UPDATED = '2026年5月13日'
       </p>
     </section>
 
-    <div class="border-t border-slate-200 pt-6">
-      <NuxtLink to="/" class="text-sm text-slate-600 hover:text-orange-700 inline-flex items-center gap-1">
-        <UIcon name="i-lucide-chevron-left" class="size-4" />
-        トップへ戻る
-      </NuxtLink>
+      <div class="border-t border-slate-200 pt-6">
+        <NuxtLink to="/" class="text-sm text-slate-600 hover:text-orange-700 inline-flex items-center gap-1">
+          <UIcon name="i-lucide-chevron-left" class="size-4" />
+          トップへ戻る
+        </NuxtLink>
+      </div>
     </div>
   </div>
 </template>

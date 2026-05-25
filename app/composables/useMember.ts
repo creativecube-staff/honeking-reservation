@@ -9,6 +9,8 @@ type MemberMe = {
     phone: string | null
     email: string | null
     lastLoginAt: string | null
+    lineLinked: boolean
+    lineDisplayName: string | null
   } | null
 }
 

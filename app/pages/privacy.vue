@@ -22,9 +22,11 @@ const LAST_UPDATED = "2026年5月13日";
 
 <template>
   <div
-    class="mx-auto max-w-3xl px-4 sm:px-6 py-10 text-slate-800 leading-relaxed"
+    class="mx-auto max-w-5xl px-4 sm:px-6 py-10 text-slate-800 leading-relaxed"
   >
-    <h1 class="text-2xl sm:text-3xl font-bold text-slate-900 mb-2">
+    <div class="max-w-3xl mx-auto">
+    <h1 class="text-2xl sm:text-3xl font-bold text-slate-900 mb-2 flex items-center gap-2">
+      <UIcon name="i-lucide-shield-check" class="size-6 sm:size-7 text-orange-500" />
       プライバシーポリシー
     </h1>
     <p class="text-sm text-slate-500 mb-8">
@@ -544,6 +546,7 @@ const LAST_UPDATED = "2026年5月13日";
         <UIcon name="i-lucide-chevron-left" class="size-4" />
         トップへ戻る
       </NuxtLink>
+    </div>
     </div>
   </div>
 </template>

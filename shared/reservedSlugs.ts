@@ -15,6 +15,7 @@ export const RESERVED_SLUGS: ReadonlyArray<string> = [
   'password-reset',
   'privacy',
   'terms',
+  'auth',
 
   // フレームワーク / API 予約
   'api',

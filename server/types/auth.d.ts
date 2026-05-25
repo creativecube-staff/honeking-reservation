@@ -24,10 +24,24 @@ declare module '#auth-utils' {
     name: string
   }
 
+  // LINE Login 後、まだ Customer に紐付いていない中間状態の保持。
+  // /api/auth/line/callback で記録 → /auth/line/link or /auth/line/signup で消費 → 確定で削除。
+  // 一時的なものなので短時間（後段の API 側でも expiresAt を持って二重チェックする）。
+  interface PendingLineLink {
+    lineUserId: string
+    lineDisplayName?: string
+    // LINE Login の email scope で取得できた場合のみ入る（取れないユーザーも多い）。
+    email?: string
+    // 既存 Customer のメアドにヒットした場合の Customer ID（link フローでパスワード本人確認に使う）。
+    matchedCustomerId?: number
+    issuedAt: string
+  }
+
   interface UserSession {
     loggedInAt?: string
     member?: UserSessionMember
     memberLoggedInAt?: string
+    pendingLineLink?: PendingLineLink
   }
 }
 

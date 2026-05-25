@@ -265,6 +265,12 @@ model Customer {
   // 退会時は passwordHash / emailVerifiedAt / lastLoginAt / termsAgreedAt 等もクリアされる（withdraw.post.ts 参照）
   // 暗号化済 name / phone / email は残し、来店履歴を保持する
   withdrawnAt            DateTime?
+  // LINE 連携情報
+  // lineUserId: LINE Login で取得できるユーザー固有 ID（"U" で始まる 33 文字）。
+  // 1 顧客 = 0 or 1 LINE アカウント。null = 未連携。退会時はクリア。
+  // lineDisplayName: 連携時点の LINE プロフィール表示名。マイページ「LINE と連携中」表記用（PII としては緩い）。
+  lineUserId             String?   @unique
+  lineDisplayName        String?
   createdAt              DateTime  @default(now())
   updatedAt              DateTime  @updatedAt
 

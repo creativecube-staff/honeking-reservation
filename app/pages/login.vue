@@ -15,10 +15,19 @@ const isAdminHost = computed(() => {
 // admin ホストでは default layout を無効化（admin は独自カードレイアウト）
 definePageMeta({ layout: false })
 
+// admin ホストでは admin layout が適用されないため、ここでモノクロファビコンを直接指定する。
+// admin layout の指定とパスを揃えること(public/admin-favicon-*.png)。
 useHead({
   title: isAdminHost.value
     ? 'ログイン | honeking 管理画面'
     : 'ログイン | ほねキング整骨院 予約',
+  link: isAdminHost.value
+    ? [
+        { rel: 'icon', type: 'image/png', sizes: '32x32', href: '/admin-favicon-32.png' },
+        { rel: 'icon', type: 'image/png', sizes: '16x16', href: '/admin-favicon-32.png' },
+        { rel: 'apple-touch-icon', sizes: '180x180', href: '/admin-favicon-180.png' },
+      ]
+    : [],
 })
 </script>
 

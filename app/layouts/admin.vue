@@ -6,6 +6,31 @@ import { ROLE_LABEL } from '~~/shared/permissions'
 
 const { user, fetch: fetchSession, clear: clearSession } = useUserSession()
 
+// 管理画面共通のタイトル・ファビコン上書き。
+// - タイトル: 各ページが useHead で上書きしない場合のデフォルト。
+// - ファビコン: 既存の honeking.jp 本体のファビコン(カラー版)を SVG <image> で参照し、
+//   feColorMatrix で grayscale 化したものを data URI で読ませる(管理画面はモノクロブランド)。
+//   元画像をフェッチしないので CORS の問題も起きない(SVG 内部で参照するだけ)。
+const FAVICON_SRC_32 = 'https://honeking.jp/wp/wp-content/themes/honeking/assets/img/favicon/honeking/favicon-32x32.png'
+const FAVICON_SRC_180 = 'https://honeking.jp/wp/wp-content/themes/honeking/assets/img/favicon/honeking/apple-touch-icon.png'
+
+function monoSvgDataUri(srcUrl: string, size: number): string {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}"><defs><filter id="g"><feColorMatrix type="matrix" values="0.3 0.59 0.11 0 0  0.3 0.59 0.11 0 0  0.3 0.59 0.11 0 0  0 0 0 1 0"/></filter></defs><image href="${srcUrl}" width="${size}" height="${size}" filter="url(#g)"/></svg>`
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`
+}
+
+useHead({
+  titleTemplate: title => title ? `${title} | honeking 管理画面` : 'honeking 管理画面',
+  link: [
+    // nuxt.config.ts で定義したカラー版を上書き(管理画面だけモノクロ)
+    { rel: 'icon', type: 'image/svg+xml', href: monoSvgDataUri(FAVICON_SRC_32, 32) },
+    { rel: 'apple-touch-icon', sizes: '180x180', href: monoSvgDataUri(FAVICON_SRC_180, 180) },
+    // 旧ブラウザ用の PNG/ICO は明示的に外す(同 rel/sizes だと Nuxt がマージしないので key で識別)
+    { rel: 'icon', type: 'image/png', sizes: '32x32', href: monoSvgDataUri(FAVICON_SRC_32, 32), key: 'favicon-32' },
+    { rel: 'icon', type: 'image/png', sizes: '16x16', href: monoSvgDataUri(FAVICON_SRC_32, 16), key: 'favicon-16' },
+  ],
+})
+
 // 「サイトを表示」リンク用に admin.* ホストから reserve.* ホストの URL を組み立てる。
 // dev: admin.honeking.localhost → reserve.honeking.localhost
 // prod: admin.honeking.jp → reserve.honeking.jp

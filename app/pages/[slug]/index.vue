@@ -29,6 +29,26 @@ type Menu = {
 const { data: store, error: storeError } = await useFetch<Store>(() => `/api/stores/${slug.value}`)
 const { data: menus, status: menusStatus, error: menusError } = await useFetch<Menu[]>(() => `/api/stores/${slug.value}/menus`)
 
+// 店舗名込みの動的タイトル + description(SSR 時に店舗データが取れていればそれを使う)。
+useHead(() => {
+  const s = store.value
+  const title = s
+    ? `${s.name} のご予約 | ほねキング整骨院グループ`
+    : 'ご予約 | ほねキング整骨院グループ'
+  const description = s
+    ? `${s.prefecture}${s.city}「${s.name}」の Web 予約ページ。メニュー・日時を選んで 24 時間ご予約いただけます。`
+    : '整骨院の Web 予約ページ。メニュー・日時を選んで 24 時間ご予約いただけます。'
+  return {
+    title,
+    meta: [
+      { name: 'description', content: description },
+      { property: 'og:title', content: title },
+      { property: 'og:description', content: description },
+      { property: 'og:type', content: 'website' },
+    ],
+  }
+})
+
 type StepName = 'menu' | 'datetime' | 'confirm'
 const STEP_ORDER: StepName[] = ['menu', 'datetime', 'confirm']
 

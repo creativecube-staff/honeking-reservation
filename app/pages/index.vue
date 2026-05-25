@@ -1,4 +1,15 @@
 <script setup lang="ts">
+// お客様トップ(店舗選択)。reserve. ホスト用のタイトル・OGP を設定。
+useHead({
+  title: 'ご予約 | ほねキング整骨院グループ・海道整骨院',
+  meta: [
+    { name: 'description', content: '千葉県・流山おおたかの森、松戸駅東口の整骨院。Web から 24 時間いつでもご予約を承ります。LINE 連携で次回からのご予約もスムーズに。' },
+    { property: 'og:title', content: 'ご予約 | ほねキング整骨院グループ・海道整骨院' },
+    { property: 'og:description', content: '千葉県・流山おおたかの森、松戸駅東口の整骨院。Web から 24 時間いつでもご予約を承ります。' },
+    { property: 'og:type', content: 'website' },
+  ],
+})
+
 const { data: stores, status, error } = await useFetch('/api/stores')
 
 type StoreItem = NonNullable<typeof stores.value>[number]

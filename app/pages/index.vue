@@ -3,9 +3,9 @@
 useHead({
   title: 'ご予約 | ほねキング整骨院グループ・海道整骨院',
   meta: [
-    { name: 'description', content: '千葉県・流山おおたかの森、松戸駅東口の整骨院。Web から 24 時間いつでもご予約を承ります。LINE 連携で次回からのご予約もスムーズに。' },
+    { name: 'description', content: '千葉県・流山おおたかの森の整骨院。Web から 24 時間いつでもご予約を承ります。LINE 連携で次回からのご予約もスムーズに。' },
     { property: 'og:title', content: 'ご予約 | ほねキング整骨院グループ・海道整骨院' },
-    { property: 'og:description', content: '千葉県・流山おおたかの森、松戸駅東口の整骨院。Web から 24 時間いつでもご予約を承ります。' },
+    { property: 'og:description', content: '千葉県・流山おおたかの森の整骨院。Web から 24 時間いつでもご予約を承ります。' },
     { property: 'og:type', content: 'website' },
   ],
 })

@@ -1,8 +1,12 @@
 <script setup lang="ts">
-import type { Store } from '@prisma/client'
 import { createProductSchema } from '~~/shared/schemas/product'
 
 definePageMeta({ layout: 'admin', requirePermission: 'product:edit' })
+
+// 登録先は店舗スイッチャーのコンテキストで決まる:
+// 管理者(全店)モード = 共通商品（storeId=null）/ 店舗モード = その店の店舗特別商品。
+const { selectedStoreId, canAccessAll, selectedStoreName } = useStoreContext()
+const isAdminView = computed(() => canAccessAll.value && selectedStoreId.value === null)
 
 const state = reactive({
   storeId: null as number | null,
@@ -16,7 +20,10 @@ const state = reactive({
   displayOrder: 0,
 })
 
-const { data: stores } = await useFetch<Store[]>('/api/admin/stores', { query: { status: 'active' } })
+// コンテキストに応じて登録先 storeId を固定（管理者=共通=null / 店舗=その店）
+watchEffect(() => {
+  state.storeId = isAdminView.value ? null : selectedStoreId.value
+})
 
 const fieldErrors = ref<Record<string, string>>({})
 const formError = ref<string | null>(null)
@@ -97,15 +104,15 @@ async function onSubmit() {
       </div>
 
       <div>
-        <label class="block text-sm font-semibold text-slate-900 mb-1.5">店舗</label>
-        <select v-model.number="state.storeId" class="w-full px-2.5 py-2 text-sm border border-[#8c8f94] rounded-sm bg-white focus:outline-none focus:border-orange-500">
-          <option :value="null">
-            共通（全店舗で販売）
-          </option>
-          <option v-for="store in stores ?? []" :key="store.id" :value="store.id">
-            {{ store.name }} のみ
-          </option>
-        </select>
+        <label class="block text-sm font-semibold text-slate-900 mb-1.5">登録先</label>
+        <p class="text-sm text-slate-800 px-2.5 py-2 border border-[#dcdcde] rounded-sm bg-slate-50">
+          {{ isAdminView ? '共通（全店舗で販売）' : `${selectedStoreName} のみ` }}
+        </p>
+        <p class="text-xs text-slate-500 mt-1">
+          {{ isAdminView
+            ? '管理者モードでは全店共通の商品として登録されます。店舗だけの商品は、ヘッダーで店舗を選んでから追加してください。'
+            : 'この店舗だけで販売する店舗特別商品として登録されます。' }}
+        </p>
       </div>
 
       <div>

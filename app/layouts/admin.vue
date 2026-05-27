@@ -33,13 +33,31 @@ const customerSiteUrl = computed(() => {
 })
 
 // ナビ定義。横タブに収めるためラベルは短縮。各項目に必要 permission を紐付けてフィルタする。
-// permission が null の項目（ヘルプ）は全員に表示する。
-const allNavItems: ReadonlyArray<{ icon: string, label: string, to: string, permission: Permission | null }> = [
+// 店舗スイッチャーの選択でタブ構成を 2 種類に切り替える:
+//  - 管理者(全店)モード [OWNER が「管理者」を選択 = selectedStoreId null]: 経営の管理メニュー（店舗・共通マスタ・全体売上）
+//  - 店舗モード [特定店舗を選択 / OWNER 以外の固定店舗]: 日々の店舗オペレーション
+// ※ 店舗の新規登録・ベッド数入力は「店舗管理」で行うため、店舗モードには「店舗」タブを出さない
+type NavItem = { icon: string, label: string, to: string, permission: Permission | null }
+
+// 管理者(全店)モードのタブ。店舗の新規登録・ベッド編集はここ（店舗管理）でのみ行う。
+const adminNavItems: ReadonlyArray<NavItem> = [
+  { icon: 'i-lucide-building-2', label: '店舗管理', to: '/dashboard/stores', permission: 'store:view' },
+  { icon: 'i-lucide-clipboard-list', label: '共通メニュー管理', to: '/dashboard/menus', permission: 'menu:view' },
+  { icon: 'i-lucide-package', label: '共通商品管理', to: '/dashboard/products', permission: 'product:view' },
+  // ログイン管理は OWNER 専用機能。管理者モードのナビは OWNER しか出ないので permission:null でよい（API 側でも OWNER ガード済み）
+  { icon: 'i-lucide-key-round', label: 'ログイン管理', to: '/dashboard/accounts', permission: null },
+  { icon: 'i-lucide-trending-up', label: '売上管理', to: '/dashboard/sales', permission: 'sale:view' },
+]
+
+// 店舗モードのタブ。「店舗管理」は店休日の入力のみ、「メニュー」「商品」はその店の店舗特別分を扱う
+// （共通メニュー・共通商品・店舗の基本情報/ベッド/営業時間は管理者モード専用）。
+const storeNavItems: ReadonlyArray<NavItem> = [
   // ダッシュボードはロゴクリックで戻れるため、タブには出さない
   { icon: 'i-lucide-calendar-check', label: '予約・販売', to: '/dashboard/reservations', permission: 'reservation:view' },
   { icon: 'i-lucide-users', label: '顧客', to: '/dashboard/customers', permission: 'customer:view' },
   { icon: 'i-lucide-calendar-clock', label: 'シフト', to: '/dashboard/shifts', permission: 'shift:view' },
-  { icon: 'i-lucide-building-2', label: '店舗', to: '/dashboard/stores', permission: 'store:view' },
+  // 店舗モードの「店舗管理」は自店の店休日のみ（store/index.vue がコンテキストで出し分け）
+  { icon: 'i-lucide-building-2', label: '店舗管理', to: '/dashboard/stores', permission: 'store:view' },
   { icon: 'i-lucide-user-round', label: 'スタッフ', to: '/dashboard/staff', permission: 'staff:view' },
   { icon: 'i-lucide-clipboard-list', label: 'メニュー', to: '/dashboard/menus', permission: 'menu:view' },
   { icon: 'i-lucide-package', label: '商品', to: '/dashboard/products', permission: 'product:view' },
@@ -47,9 +65,13 @@ const allNavItems: ReadonlyArray<{ icon: string, label: string, to: string, perm
   // ヘルプはタブには出さず、右端 ▼ のアカウントメニューに含める
 ]
 
+// 管理者(全店)モードか。OWNER が店舗スイッチャーで「管理者」を選んでいるときだけ true。
+const isAdminContext = computed(() => canAccessAll.value && selectedStoreId.value === null)
+
 const navItems = computed(() => {
   const perms = user.value?.permissions ?? []
-  return allNavItems.filter(item => item.permission === null || perms.includes(item.permission))
+  const base = isAdminContext.value ? adminNavItems : storeNavItems
+  return base.filter(item => item.permission === null || perms.includes(item.permission))
 })
 
 const userRoleLabel = computed(() => {
@@ -77,8 +99,14 @@ async function logout() {
     <!-- 上段: 白地ヘッダー（ロゴ + アカウント）。境界線で本体と分ける -->
     <!-- relative z-20: 右端ドロップダウンを本体コンテンツより前面に出すための重ね順 -->
     <header class="relative z-20 bg-gradient-to-b from-white to-slate-50 border-b-2 border-orange-500 text-slate-800">
+      <!-- 管理者(全店)モードのときだけ、ほんのり暖色のティントをかぶせる。透明度のフェードで切り替える。 -->
+      <div
+        class="pointer-events-none absolute inset-0 bg-gradient-to-b from-orange-50 to-amber-50 transition-opacity duration-500"
+        :class="isAdminContext ? 'opacity-100' : 'opacity-0'"
+      />
       <!-- PC グリッド相当: 左にロゴ(2段ぶん・縦中央) / 右上=店舗スイッチャー / 右下=タブ -->
-      <div class="flex items-stretch gap-6 px-4 max-w-7xl mx-auto">
+      <!-- relative: 上のティント層より前面に出す -->
+      <div class="relative flex items-stretch gap-6 px-4 max-w-7xl mx-auto">
         <!-- ロゴ: 左・縦中央。クリックでダッシュボードに戻る入口 -->
         <NuxtLink to="/dashboard" class="group flex shrink-0 items-center gap-2.5">
           <img :src="logoUrl" alt="ほねキング整骨院" class="size-12 object-contain">
@@ -138,26 +166,30 @@ async function logout() {
           <!-- 下段: タブ + アカウント▼。-ml-1 でスイッチャーの下に内容を揃えつつ少し左へ -->
           <div class="-ml-1 flex items-stretch">
             <!-- 横タブ（非選択=グレー地+オレンジ文字 / ホバー・選択中=オレンジ塗り+白文字。底辺に揃えてタブバーらしく） -->
-            <nav class="flex flex-1 items-end gap-1 overflow-x-auto">
-              <NuxtLink
-                v-for="item in navItems"
-                :key="item.to"
-                :to="item.to"
-                class="flex items-center gap-1.5 rounded-t-md border-x border-t px-3.5 py-2 text-sm font-bold whitespace-nowrap transition-colors"
-                :class="isActive(item.to)
-                  ? 'border-orange-500 bg-gradient-to-b from-orange-500 to-orange-600 text-white shadow-sm'
-                  : 'border-orange-500 bg-gradient-to-b from-slate-50 to-slate-200 text-orange-600 hover:from-orange-500 hover:to-orange-600 hover:text-white'"
-              >
-                <UIcon :name="item.icon" class="size-4 flex-shrink-0" />
-                {{ item.label }}
-              </NuxtLink>
+            <!-- 指示しやすいよう固有クラスを付与: nav 全体=admin-nav / 各タブ=admin-nav-tab / 選択中タブ=admin-nav-tab--active（store-switcher と同方針） -->
+            <nav class="admin-nav relative flex flex-1 items-end gap-1 overflow-x-auto">
+              <TransitionGroup name="navtab">
+                <NuxtLink
+                  v-for="item in navItems"
+                  :key="item.to"
+                  :to="item.to"
+                  class="admin-nav-tab flex items-center gap-1.5 rounded-t-md border-x border-t px-3.5 py-2 text-sm font-bold whitespace-nowrap transition-colors"
+                  :class="isActive(item.to)
+                    ? 'admin-nav-tab--active border-orange-500 bg-gradient-to-b from-orange-500 to-orange-600 text-white shadow-sm'
+                    : 'border-orange-500 bg-gradient-to-b from-slate-50 to-slate-200 text-orange-600 hover:from-orange-500 hover:to-orange-600 hover:text-white'"
+                >
+                  <UIcon :name="item.icon" class="admin-nav-tab__icon size-4 flex-shrink-0" />
+                  <span class="admin-nav-tab__label">{{ item.label }}</span>
+                </NuxtLink>
+              </TransitionGroup>
             </nav>
 
-            <!-- 右端: アカウントメニュー（▼）。タブと同じ見た目の小ボタン。中にアカウント情報 + サイト表示 + ログアウトを集約 -->
-            <div class="group relative flex shrink-0 items-end pl-1">
+            <!-- 右端: アカウントメニュー（▼）。タブと同じ見た目（下辺以外の枠 = border-x + border-t）の小ボタン。中にアカウント情報 + サイト表示 + ログアウトを集約 -->
+            <!-- 指示しやすいよう固有クラスを付与: 親=account-menu / ボタン=account-menu-button -->
+            <div class="account-menu group relative flex shrink-0 items-end pl-1">
               <button
                 type="button"
-                class="flex items-center rounded-t-md bg-slate-100 px-3 py-2 text-orange-600 transition-colors group-hover:bg-orange-600 group-hover:text-white group-focus-within:bg-orange-600 group-focus-within:text-white"
+                class="account-menu-button flex items-center rounded-t-md border-x border-t border-orange-500 bg-slate-100 px-3 py-2 text-orange-600 transition-colors group-hover:bg-orange-600 group-hover:text-white group-focus-within:bg-orange-600 group-focus-within:text-white"
                 aria-label="アカウントメニュー"
               >
                 <UIcon name="i-lucide-chevron-down" class="size-4" />
@@ -207,3 +239,24 @@ async function logout() {
     </main>
   </div>
 </template>
+
+<style scoped>
+/* 店舗スイッチャー切替（管理者⇄店舗）時に、タブの入れ替えをふわっとアニメーションさせる。
+   両モードで共通するタブ（店舗管理・メニュー・商品・売上）は key が同じなので残り、
+   異なるタブだけが fade + 上下スライドで出入りする。 */
+.navtab-enter-active {
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+.navtab-leave-active {
+  /* 退場するタブは絶対配置にしてレイアウトの詰まりを防ぐ（入場タブが先に整列する） */
+  position: absolute;
+  transition: opacity 0.15s ease;
+}
+.navtab-enter-from {
+  opacity: 0;
+  transform: translateY(6px);
+}
+.navtab-leave-to {
+  opacity: 0;
+}
+</style>

@@ -16,17 +16,6 @@ const STORES = [
     beds: 4,
     practitioners: ['田中 健太', '佐藤 美咲'],
   },
-  {
-    slug: 'matsudo-higashi',
-    prefecture: '千葉県',
-    city: '松戸市',
-    name: '松戸駅東口整骨院',
-    address: '千葉県松戸市松戸 1234-5',
-    phone: '047-369-0000',
-    displayOrder: 2,
-    beds: 6,
-    practitioners: ['鈴木 太郎', '山田 由美'],
-  },
 ];
 
 // 共通メニュー（storeId IS NULL で投入。全店舗で自動利用可能）

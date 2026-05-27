@@ -7,6 +7,10 @@ const props = defineProps<{
   storeId: number
 }>()
 
+// 保存は親（店舗詳細の最下部「更新」ボタン）が制御する。
+// 変更有無は update:dirty で親へ通知し、保存/リセットは defineExpose で公開する。
+const emit = defineEmits<{ 'update:dirty': [boolean] }>()
+
 type ApiRow = { id: number, dayOfWeek: number, startTime: string, endTime: string }
 
 const { data: apiRows, refresh, error } = await useFetch<ApiRow[]>(
@@ -17,12 +21,17 @@ const { data: apiRows, refresh, error } = await useFetch<ApiRow[]>(
 // ── 曜日定義（縦カレンダーの列）─────────────────────
 const dowLabels = ['日', '月', '火', '水', '木', '金', '土']
 const dowHeaderColors = ['text-red-600', '', '', '', '', '', 'text-blue-600']
+// 日曜=薄い赤 / 土曜=薄い青の行背景
+const dowBgClass = ['bg-red-50', '', '', '', '', '', 'bg-blue-50']
+// 月曜はじまり・日曜を最後（土曜の下）に並べる
+const dowOrder = [1, 2, 3, 4, 5, 6, 0]
 
 const columns = computed<CalendarColumn[]>(() =>
-  Array.from({ length: 7 }, (_, dow) => ({
+  dowOrder.map(dow => ({
     id: dow,
     label: dowLabels[dow]!,
     headerClass: dowHeaderColors[dow],
+    bgClass: dowBgClass[dow],
   })),
 )
 
@@ -34,15 +43,32 @@ function newId() {
 }
 
 const ranges = ref<CalendarRange[]>([])
+const baseline = ref('')
 
-watchEffect(() => {
+// 比較用に正規化（一時 id は無視し、曜日・時刻でソート）
+function serialize(rs: CalendarRange[]): string {
+  return JSON.stringify(
+    rs.map(r => ({ d: Number(r.columnId), s: r.startTime, e: r.endTime }))
+      .sort((a, b) => a.d - b.d || a.s.localeCompare(b.s) || a.e.localeCompare(b.e)),
+  )
+}
+
+// API データから ranges と baseline を作る（初回ロード / リセット時）
+function loadFromApi() {
   ranges.value = (apiRows.value ?? []).map(r => ({
     id: newId(),
     columnId: r.dayOfWeek,
     startTime: r.startTime,
     endTime: r.endTime,
   }))
-})
+  baseline.value = serialize(ranges.value)
+}
+// apiRows が変わったときだけ再ロード（ranges を依存に含めないため watchEffect は使わない）
+watch(apiRows, () => loadFromApi(), { immediate: true })
+
+// 変更有無。親へ随時通知する。
+const isDirty = computed(() => serialize(ranges.value) !== baseline.value)
+watch(isDirty, v => emit('update:dirty', v), { immediate: true })
 
 // ── 「他の曜日にコピー」 ────────────────────────────────
 function applyDayToAll(columnId: string | number) {
@@ -63,14 +89,8 @@ function applyDayToAll(columnId: string | number) {
   ranges.value = next
 }
 
-// ── 保存 ──────────────────────────────────────────────
-const formError = ref<string | null>(null)
-const saving = ref(false)
-const savedAt = ref<string | null>(null)
-
-async function onSave() {
-  formError.value = null
-
+// 親（更新ボタン）から呼ばれる保存。検証/通信に失敗したら例外を投げ、親がエラー表示する。
+async function save() {
   const payload: BusinessHourRangeInput[] = ranges.value.map(r => ({
     dayOfWeek: r.columnId as number,
     startTime: r.startTime,
@@ -79,27 +99,23 @@ async function onSave() {
 
   const parsed = businessHoursBulkSchema.safeParse({ ranges: payload })
   if (!parsed.success) {
-    formError.value = parsed.error.issues[0]?.message ?? '入力内容を確認してください'
-    return
+    throw new Error(parsed.error.issues[0]?.message ?? '営業時間の入力内容を確認してください')
   }
 
-  saving.value = true
-  try {
-    await $fetch(`/api/admin/stores/${props.storeId}/business-hours`, {
-      method: 'PUT',
-      body: { ranges: parsed.data.ranges },
-    })
-    savedAt.value = new Date().toLocaleTimeString('ja-JP')
-    await refresh()
-  }
-  catch (e) {
-    const err = e as { statusMessage?: string, data?: { statusMessage?: string } }
-    formError.value = err.data?.statusMessage || err.statusMessage || '保存に失敗しました'
-  }
-  finally {
-    saving.value = false
-  }
+  await $fetch(`/api/admin/stores/${props.storeId}/business-hours`, {
+    method: 'PUT',
+    body: { ranges: parsed.data.ranges },
+  })
+  // 再取得すると watch(apiRows) で baseline が更新され、isDirty が false に戻る
+  await refresh()
 }
+
+// 親（キャンセル等）から呼ばれるリセット
+function reset() {
+  loadFromApi()
+}
+
+defineExpose({ save, reset })
 </script>
 
 <template>
@@ -111,65 +127,26 @@ async function onSave() {
       :title="`営業時間の取得に失敗しました: ${error.message}`"
     />
 
-    <UAlert
-      v-if="formError"
-      color="error"
-      icon="i-lucide-triangle-alert"
-      :title="formError"
-    />
-
-    <div v-if="savedAt" class="text-xs text-green-700 bg-green-50 border border-green-200 px-3 py-1.5 rounded-sm">
-      ✓ {{ savedAt }} に保存しました
-    </div>
-
-    <!-- 操作ヒント -->
-    <div class="bg-blue-50 border border-blue-200 px-3 py-2 rounded-sm text-xs text-blue-900 leading-relaxed">
-      <strong>操作:</strong>
-      空白部分を縦にドラッグ → 営業レンジを新規作成 ／
-      バーを掴んで移動 ／ バーの<strong>上下端</strong>を掴んでリサイズ ／
-      バー右上の <span class="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-white border border-orange-400 text-orange-700 text-[10px] font-bold align-middle">×</span> で削除。
-      中抜け休憩は <strong>2 つのレンジ</strong>で表現します（例: 9:30-12:30 と 15:00-20:30）。
-      レンジが 0 件 = 店休日。15 分単位でスナップします。
-    </div>
-
-    <!-- 週間カレンダー -->
-    <div class="bg-white border border-[#c3c4c7] rounded-sm shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
-      <div class="px-4 py-2.5 border-b border-[#dcdcde] flex items-center justify-between">
-        <h3 class="text-sm font-semibold text-slate-900">
-          営業時間
-        </h3>
-        <p class="text-xs text-slate-500">
-          ドラッグ&ドロップで編集
-        </p>
-      </div>
-
-      <CalendarTimeColumnCalendar
+    <!-- 週間カレンダー（横軸=時刻 / 縦=曜日） -->
+    <div class="bg-white border border-[#c3c4c7] rounded-sm shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
+      <CalendarTimeRowCalendar
         v-model:ranges="ranges"
         :columns="columns"
+        :hour-start="8"
+        :hour-end="22"
         empty-label="店休"
       >
-        <template #column-header-actions="{ column }">
+        <template #row-label-actions="{ column }">
           <button
             type="button"
-            class="absolute right-0.5 text-[9px] text-blue-700 hover:text-blue-900 hover:underline opacity-0 group-hover:opacity-100"
+            class="absolute bottom-0.5 left-1/2 -translate-x-1/2 text-[9px] text-blue-700 hover:text-blue-900 hover:underline opacity-0 group-hover:opacity-100 whitespace-nowrap"
             title="この曜日を他の全曜日にコピー"
-            @click="applyDayToAll(column.id)"
+            @click.stop="applyDayToAll(column.id)"
           >
             全曜日へ
           </button>
         </template>
-      </CalendarTimeColumnCalendar>
-    </div>
-
-    <div class="flex items-center justify-end pt-2">
-      <button
-        type="button"
-        :disabled="saving"
-        class="px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white text-sm font-semibold rounded-sm shadow-sm"
-        @click="onSave"
-      >
-        {{ saving ? '保存中...' : '営業時間を保存' }}
-      </button>
+      </CalendarTimeRowCalendar>
     </div>
   </div>
 </template>

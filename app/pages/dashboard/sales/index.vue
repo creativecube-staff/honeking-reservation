@@ -5,6 +5,12 @@ import type { Store } from '@prisma/client'
 
 definePageMeta({ layout: 'admin', requirePermission: 'sale:view' })
 
+// 店舗スイッチャーのコンテキスト。
+// 管理者(全店)モードの「売上管理」は全体経営ダッシュボードを構築予定のため、現状は改修中のプレースホルダーを表示する。
+// 店舗モード（特定店舗選択時）は従来どおりの集計画面を出す。
+const { selectedStoreId, canAccessAll } = useStoreContext()
+const isAdminContext = computed(() => canAccessAll.value && selectedStoreId.value === null)
+
 type RevenueBucket = { menu: number, product: number, voucher: number, total: number }
 type DayRow = { date: string } & RevenueBucket
 type StoreRow = { storeId: number, storeName: string } & RevenueBucket
@@ -87,6 +93,26 @@ function dayLabel(ymd: string): string {
 
 <template>
   <div>
+    <!-- 管理者(全店)モードの「売上管理」は全体経営の売上ダッシュボードを構築予定。現在は改修中のプレースホルダーを表示する -->
+    <div v-if="isAdminContext" class="flex min-h-[60vh] flex-col items-center justify-center text-center">
+      <div class="flex size-16 items-center justify-center rounded-full bg-orange-50 text-orange-500">
+        <UIcon name="i-lucide-hard-hat" class="size-8" />
+      </div>
+      <h1 class="mt-4 text-2xl font-semibold text-slate-900">
+        売上管理（全体）
+      </h1>
+      <p class="mt-2 max-w-md text-sm text-slate-600">
+        全店舗をまとめた経営向けの売上ダッシュボードは現在改修中です。<br>
+        店舗ごとの売上は、ヘッダーの店舗スイッチャーで店舗を選ぶと確認できます。
+      </p>
+      <span class="mt-4 inline-flex items-center gap-1.5 rounded-full bg-orange-100 px-3 py-1 text-xs font-medium text-orange-700">
+        <UIcon name="i-lucide-wrench" class="size-3.5" />
+        改修中
+      </span>
+    </div>
+
+    <!-- 店舗モード（特定店舗選択時）は従来どおりの売上集計画面 -->
+    <template v-else>
     <div class="flex items-center gap-3 mb-1 flex-wrap">
       <h1 class="text-2xl font-semibold text-slate-900">
         売上管理
@@ -318,5 +344,6 @@ function dayLabel(ymd: string): string {
         </ol>
       </div>
     </div>
+    </template>
   </div>
 </template>

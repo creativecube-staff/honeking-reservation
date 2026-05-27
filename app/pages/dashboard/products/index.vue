@@ -1,7 +1,10 @@
 <script setup lang="ts">
-import type { Store } from '@prisma/client'
-
 definePageMeta({ layout: 'admin', requirePermission: 'product:view' })
+
+// 店舗スイッチャーのコンテキスト。
+// 管理者(全店)モード = 共通商品（storeId=null）/ 店舗モード = 自店の店舗特別商品。
+const { selectedStoreId, canAccessAll, selectedStoreName } = useStoreContext()
+const isAdminView = computed(() => canAccessAll.value && selectedStoreId.value === null)
 
 type ProductRow = {
   id: number
@@ -22,34 +25,32 @@ type Status = 'all' | 'active' | 'inactive'
 type KindFilter = 'all' | 'PRODUCT' | 'VOUCHER'
 const status = ref<Status>('all')
 const kind = ref<KindFilter>('all')
-const storeFilter = ref<number | 'all'>('all')
 
-const { data: stores } = await useFetch<Store[]>('/api/admin/stores', { query: { status: 'active' } })
 const { data: products, refresh } = await useFetch<ProductRow[]>('/api/admin/products', { query: { status: 'all' } })
 
-const filtered = computed(() => {
+// コンテキストで対象を絞る: 管理者 = 共通商品(storeId=null) / 店舗モード = その店の店舗特別商品
+const contextProducts = computed(() => {
   const list = products.value ?? []
-  return list
-    .filter((p) => {
-      if (status.value === 'active') return p.isActive
-      if (status.value === 'inactive') return !p.isActive
-      return true
-    })
-    .filter((p) => {
-      if (kind.value === 'all') return true
-      return p.kind === kind.value
-    })
-    .filter((p) => {
-      if (storeFilter.value === 'all') return true
-      if (storeFilter.value === 0) return p.storeId === null // 共通商品
-      return p.storeId === storeFilter.value
-    })
+  if (isAdminView.value) return list.filter(p => p.storeId === null)
+  return list.filter(p => p.storeId === selectedStoreId.value)
 })
 
-const counts = computed(() => {
-  const list = products.value ?? []
-  return { all: list.length, active: list.filter(p => p.isActive).length, inactive: list.filter(p => !p.isActive).length }
-})
+const filtered = computed(() => contextProducts.value
+  .filter((p) => {
+    if (status.value === 'active') return p.isActive
+    if (status.value === 'inactive') return !p.isActive
+    return true
+  })
+  .filter((p) => {
+    if (kind.value === 'all') return true
+    return p.kind === kind.value
+  }))
+
+const counts = computed(() => ({
+  all: contextProducts.value.length,
+  active: contextProducts.value.filter(p => p.isActive).length,
+  inactive: contextProducts.value.filter(p => !p.isActive).length,
+}))
 
 const tabs: { v: Status, label: string }[] = [
   { v: 'all', label: 'すべて' },
@@ -87,9 +88,29 @@ function yen(n: number): string { return n.toLocaleString('ja-JP') }
 
 <template>
   <div>
+    <!-- 管理者(全店)モードの「共通商品管理」は全店共通の商品マスタを構築予定。現在は改修中のプレースホルダーを表示する -->
+    <div v-if="isAdminView" class="flex min-h-[60vh] flex-col items-center justify-center text-center">
+      <div class="flex size-16 items-center justify-center rounded-full bg-orange-50 text-orange-500">
+        <UIcon name="i-lucide-hard-hat" class="size-8" />
+      </div>
+      <h1 class="mt-4 text-2xl font-semibold text-slate-900">
+        共通商品管理
+      </h1>
+      <p class="mt-2 max-w-md text-sm text-slate-600">
+        全店舗共通の物販商品・回数券マスタは現在改修中です。<br>
+        店舗ごとの特別商品は、ヘッダーの店舗スイッチャーで店舗を選ぶと管理できます。
+      </p>
+      <span class="mt-4 inline-flex items-center gap-1.5 rounded-full bg-orange-100 px-3 py-1 text-xs font-medium text-orange-700">
+        <UIcon name="i-lucide-wrench" class="size-3.5" />
+        改修中
+      </span>
+    </div>
+
+    <!-- 店舗モード: 自店の店舗特別商品 -->
+    <template v-else>
     <div class="flex items-center gap-3 mb-1">
       <h1 class="text-2xl font-semibold text-slate-900">
-        商品管理
+        {{ isAdminView ? '共通商品管理' : `${selectedStoreName} の店舗特別商品` }}
       </h1>
       <NuxtLink
         v-if="canEdit"
@@ -100,7 +121,12 @@ function yen(n: number): string { return n.toLocaleString('ja-JP') }
       </NuxtLink>
     </div>
     <p class="text-sm text-slate-600 mb-4">
-      物販商品と回数券を管理します。共通商品は全店舗で、店舗特別商品は指定店舗のみで販売できます。
+      <template v-if="isAdminView">
+        全店舗で販売できる共通の物販商品・回数券を管理します。店舗だけの特別商品は、ヘッダーで店舗を選んで登録します。
+      </template>
+      <template v-else>
+        {{ selectedStoreName }} だけで販売する物販商品・回数券を管理します。全店共通の商品は管理者モードの「共通商品管理」で扱います。
+      </template>
     </p>
 
     <ul class="text-sm mb-3 flex items-center">
@@ -130,19 +156,6 @@ function yen(n: number): string { return n.toLocaleString('ja-JP') }
           回数券
         </option>
       </select>
-
-      <label class="text-slate-700">店舗:</label>
-      <select v-model="storeFilter" class="px-2 py-1 text-sm border border-[#8c8f94] rounded-sm bg-white focus:outline-none focus:border-orange-500">
-        <option value="all">
-          すべて
-        </option>
-        <option :value="0">
-          共通商品のみ
-        </option>
-        <option v-for="store in stores ?? []" :key="store.id" :value="store.id">
-          {{ store.name }}
-        </option>
-      </select>
     </div>
 
     <div class="bg-white border border-[#c3c4c7] rounded-sm shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-x-auto">
@@ -154,9 +167,6 @@ function yen(n: number): string { return n.toLocaleString('ja-JP') }
             </th>
             <th class="px-3 py-2.5 text-left font-semibold border-b border-[#c3c4c7]">
               種別
-            </th>
-            <th class="px-3 py-2.5 text-left font-semibold border-b border-[#c3c4c7]">
-              店舗
             </th>
             <th class="px-3 py-2.5 text-right font-semibold border-b border-[#c3c4c7]">
               価格
@@ -171,7 +181,7 @@ function yen(n: number): string { return n.toLocaleString('ja-JP') }
         </thead>
         <tbody>
           <tr v-if="filtered.length === 0">
-            <td colspan="6" class="px-3 py-6 text-center text-slate-500">
+            <td colspan="5" class="px-3 py-6 text-center text-slate-500">
               該当する商品はありません。
             </td>
           </tr>
@@ -202,9 +212,6 @@ function yen(n: number): string { return n.toLocaleString('ja-JP') }
                 {{ p.kind === 'VOUCHER' ? '回数券' : '物販' }}
               </span>
             </td>
-            <td class="px-3 py-2.5 align-top text-slate-700">
-              {{ p.store ? p.store.name : '共通' }}
-            </td>
             <td class="px-3 py-2.5 align-top text-right tabular-nums">
               ¥{{ yen(p.priceJpy) }}
             </td>
@@ -230,5 +237,6 @@ function yen(n: number): string { return n.toLocaleString('ja-JP') }
         </tbody>
       </table>
     </div>
+    </template>
   </div>
 </template>

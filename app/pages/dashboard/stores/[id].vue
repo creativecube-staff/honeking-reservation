@@ -5,7 +5,6 @@ import { storeBaseSchema, type StoreFormState } from '~~/shared/schemas/store'
 definePageMeta({ layout: 'admin' })
 
 const route = useRoute()
-const router = useRouter()
 const id = Number(route.params.id)
 if (!Number.isInteger(id) || id <= 0) {
   throw createError({ statusCode: 400, statusMessage: '不正な ID です' })
@@ -16,24 +15,10 @@ if (loadError.value) {
   throw createError({ statusCode: 404, statusMessage: '店舗が見つかりません' })
 }
 
-// ── タブ管理 ────────────────────────────────────────────
-type TabId = 'basic' | 'beds' | 'menus' | 'hours' | 'holidays'
-const tabs: { id: TabId, label: string }[] = [
-  { id: 'basic', label: '基本情報' },
-  { id: 'beds', label: 'ベッド' },
-  { id: 'menus', label: 'メニュー' },
-  { id: 'hours', label: '営業時間' },
-  { id: 'holidays', label: '店休日' },
-]
-const activeTab = computed<TabId>(() => {
-  const t = String(route.query.tab ?? 'basic')
-  return tabs.find(x => x.id === t)?.id ?? 'basic'
-})
-function setTab(id: TabId) {
-  router.replace({ query: { ...route.query, tab: id } })
-}
+// 管理者(全店)モードの店舗設定。基本情報・ベッド・営業時間を 1 ページに縦並び（タブ廃止）。
+// 保存は最下部の「更新」1 つに集約し、基本情報と営業時間の変更をまとめて保存する。
+// （ベッドの追加・削除は操作即時反映で「更新」対象外。店舗特別メニュー/店休日は店舗モードで扱う）
 
-// ── 基本情報フォームの state ──────────────────────────────
 const state = reactive<StoreFormState>({
   slug: store.value!.slug,
   prefecture: store.value!.prefecture,
@@ -41,44 +26,86 @@ const state = reactive<StoreFormState>({
   name: store.value!.name,
   address: store.value!.address,
   phone: store.value!.phone ?? '',
+  email: store.value!.email ?? '',
   displayOrder: store.value!.displayOrder,
   isActive: store.value!.isActive,
 })
+
+// 基本情報の変更検知用スナップショット
+function snapshot(): string {
+  return JSON.stringify({
+    slug: state.slug,
+    prefecture: state.prefecture,
+    city: state.city,
+    name: state.name,
+    address: state.address,
+    phone: state.phone ?? '',
+    email: state.email ?? '',
+    displayOrder: state.displayOrder,
+    isActive: state.isActive,
+  })
+}
+const baseline = ref(snapshot())
+const basicDirty = computed(() => snapshot() !== baseline.value)
+
+// 営業時間パネル（保存・リセットを親から制御。dirty は emit で受け取る）
+const hoursPanel = ref<{ save: () => Promise<void>, reset: () => void } | null>(null)
+const hoursDirty = ref(false)
+
+// どこかに未保存変更があるか（「更新」ボタンの有効/無効に使う）
+const anyDirty = computed(() => basicDirty.value || hoursDirty.value)
 
 const fieldErrors = ref<Record<string, string>>({})
 const formError = ref<string | null>(null)
 const submitting = ref(false)
 const deleting = ref(false)
+const saved = ref(false)
 
-async function onSubmit() {
+// 更新: 基本情報と営業時間の変更をまとめて保存する
+async function onUpdate() {
+  if (!anyDirty.value || submitting.value) return
   fieldErrors.value = {}
   formError.value = null
+  saved.value = false
 
-  const payload = {
-    ...state,
-    phone: state.phone && String(state.phone).trim() !== '' ? state.phone : null,
-  }
-
-  const parsed = storeBaseSchema.safeParse(payload)
-  if (!parsed.success) {
-    const errors: Record<string, string> = {}
-    for (const issue of parsed.error.issues) {
-      const key = issue.path.join('.')
-      if (!errors[key]) errors[key] = issue.message
+  // 基本情報に変更があれば検証してペイロードを作る
+  let basicPayload: Record<string, unknown> | null = null
+  if (basicDirty.value) {
+    const payload = {
+      ...state,
+      phone: state.phone && String(state.phone).trim() !== '' ? state.phone : null,
+      email: state.email && String(state.email).trim() !== '' ? state.email : null,
     }
-    fieldErrors.value = errors
-    formError.value = '入力内容を確認してください'
-    return
+    const parsed = storeBaseSchema.safeParse(payload)
+    if (!parsed.success) {
+      const errors: Record<string, string> = {}
+      for (const issue of parsed.error.issues) {
+        const key = issue.path.join('.')
+        if (!errors[key]) errors[key] = issue.message
+      }
+      fieldErrors.value = errors
+      formError.value = '入力内容を確認してください'
+      return
+    }
+    basicPayload = parsed.data
   }
 
   submitting.value = true
   try {
-    await $fetch(`/api/admin/stores/${id}`, { method: 'PATCH', body: parsed.data })
-    await navigateTo('/dashboard/stores')
+    if (basicPayload) {
+      // 更新後の店舗を受け取り、見出し等の表示も最新に
+      store.value = await $fetch<Store>(`/api/admin/stores/${id}`, { method: 'PATCH', body: basicPayload })
+    }
+    if (hoursDirty.value && hoursPanel.value) {
+      await hoursPanel.value.save() // 失敗時は例外を投げる
+    }
+    // 成功: 基本情報のベースライン更新（営業時間側は内部 refresh で dirty が解除される）
+    baseline.value = snapshot()
+    saved.value = true
   }
   catch (e) {
-    const err = e as { statusMessage?: string, data?: { statusMessage?: string } }
-    formError.value = err.data?.statusMessage || err.statusMessage || '保存に失敗しました'
+    const err = e as { statusMessage?: string, message?: string, data?: { statusMessage?: string } }
+    formError.value = err.data?.statusMessage || err.statusMessage || err.message || '保存に失敗しました'
   }
   finally {
     submitting.value = false
@@ -103,8 +130,8 @@ async function onDelete() {
 </script>
 
 <template>
-  <div>
-    <div class="flex items-center gap-3 mb-1">
+  <div class="store-detail">
+    <div class="store-detail-header flex items-center gap-3 mb-1">
       <h1 class="text-2xl font-semibold text-slate-900">
         {{ store?.name }}
       </h1>
@@ -115,49 +142,58 @@ async function onDelete() {
         無効
       </span>
     </div>
-    <p class="text-sm text-slate-600 mb-4">
+    <p class="text-sm text-slate-600 mb-5">
       <NuxtLink to="/dashboard/stores" class="text-blue-700 hover:text-blue-900 hover:underline">
         ← 店舗一覧に戻る
       </NuxtLink>
     </p>
 
-    <!-- WP 風水平タブ -->
-    <div class="border-b border-[#c3c4c7] mb-5 flex">
-      <button
-        v-for="t in tabs"
-        :key="t.id"
-        type="button"
-        class="px-4 py-2 text-sm -mb-px border border-transparent transition-colors"
-        :class="activeTab === t.id
-          ? 'border-[#c3c4c7] border-b-white bg-white text-slate-900 font-semibold rounded-t-sm'
-          : 'text-blue-700 hover:text-blue-900 hover:bg-[#f6f7f7]'"
-        @click="setTab(t.id)"
-      >
-        {{ t.label }}
-      </button>
-    </div>
-
-    <UAlert
-      v-if="formError"
-      color="error"
-      icon="i-lucide-triangle-alert"
-      :title="formError"
-      class="mb-4"
-    />
-
-    <!-- 基本情報タブ -->
-    <form v-show="activeTab === 'basic'" class="space-y-4" @submit.prevent="onSubmit">
+    <!-- 基本情報。ベッド管理は FormFields のカード枠内（#extra スロット）に差し込む -->
+    <section class="store-detail-basic mb-8">
       <AdminStoreFormFields
         :state="state"
         :field-errors="fieldErrors"
-      />
+      >
+        <template #extra>
+          <!-- ベッド管理（基本情報の枠内・コンパクト表示。追加/削除は即時反映） -->
+          <div class="store-detail-beds">
+            <h3 class="text-sm font-semibold text-slate-700 mb-2">
+              ベッド
+            </h3>
+            <AdminStoreBedsTab :store-id="id" />
+          </div>
+        </template>
+      </AdminStoreFormFields>
+    </section>
 
-      <div class="flex items-center justify-between pt-2">
-        <div class="flex items-center gap-2">
+    <!-- 営業時間（保存は下部の「更新」にまとめる） -->
+    <section class="store-detail-hours mb-8">
+      <h2 class="text-lg font-semibold text-slate-900 mb-3">
+        営業時間
+      </h2>
+      <AdminScheduleBusinessHoursPanel
+        ref="hoursPanel"
+        :store-id="id"
+        @update:dirty="hoursDirty = $event"
+      />
+    </section>
+
+    <!-- 下部アクションバー: 更新 / キャンセル / 無効化 -->
+    <div class="store-detail-actions border-t border-[#dcdcde] pt-4 mt-2">
+      <UAlert
+        v-if="formError"
+        color="error"
+        icon="i-lucide-triangle-alert"
+        :title="formError"
+        class="mb-3"
+      />
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-3">
           <button
-            type="submit"
-            :disabled="submitting || deleting"
-            class="px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white text-sm font-semibold rounded-sm shadow-sm"
+            type="button"
+            :disabled="submitting || deleting || !anyDirty"
+            class="px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:bg-slate-300 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-sm shadow-sm"
+            @click="onUpdate"
           >
             {{ submitting ? '保存中...' : '更新' }}
           </button>
@@ -167,6 +203,12 @@ async function onDelete() {
           >
             キャンセル
           </NuxtLink>
+          <span v-if="saved && !anyDirty" class="text-sm text-green-700">
+            ✓ 保存しました
+          </span>
+          <span v-else-if="anyDirty" class="text-sm text-slate-500">
+            未保存の変更があります
+          </span>
         </div>
 
         <button
@@ -179,26 +221,6 @@ async function onDelete() {
           {{ deleting ? '無効化中...' : 'この店舗を無効化（ゴミ箱）' }}
         </button>
       </div>
-    </form>
-
-    <!-- ベッドタブ -->
-    <div v-show="activeTab === 'beds'">
-      <AdminStoreBedsTab v-if="activeTab === 'beds'" :store-id="id" />
-    </div>
-
-    <!-- メニュータブ -->
-    <div v-show="activeTab === 'menus'">
-      <AdminStoreMenusTab v-if="activeTab === 'menus'" :store-id="id" />
-    </div>
-
-    <!-- 営業時間タブ -->
-    <div v-show="activeTab === 'hours'">
-      <AdminScheduleBusinessHoursPanel v-if="activeTab === 'hours'" :store-id="id" />
-    </div>
-
-    <!-- 店休日タブ -->
-    <div v-show="activeTab === 'holidays'">
-      <AdminScheduleHolidaysPanel v-if="activeTab === 'holidays'" :store-id="id" />
     </div>
   </div>
 </template>

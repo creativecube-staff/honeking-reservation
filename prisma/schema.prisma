@@ -20,6 +20,9 @@ model Store {
   name         String
   address      String
   phone        String?
+  // 店舗の業務用メールアドレス（任意）。将来の「メール管理」連携用の入れ物。
+  // 店舗自身の連絡先であり個人情報ではないため、phone と同じく平文（暗号化しない）。
+  email        String?
   displayOrder Int      @default(0)
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
@@ -76,19 +79,44 @@ model Practitioner {
   canLogin     Boolean  @default(false)
   username     String?  @unique
   passwordHash String?
+  // 共有の店舗/オーナーアカウントは、OWNER がログイン管理画面でパスワードを確認できるよう
+  // AES-256-GCM 暗号化して併存させる（認証は passwordHash、表示用は passwordEnc）。
+  // 旧データや手入力で作られたアカウントは null（その場合は「再発行」で生成し直す）。
+  passwordEnc  String?
   role         Role?
   permissions  String[] @default([])
   totpSecret   String? // Phase 5 で 2FA 有効化用
+  // 最終ログイン日時（ログイン成功時に更新。ログイン管理画面の「最終ログイン」列用）
+  lastLoginAt  DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  store        Store         @relation(fields: [storeId], references: [id], onDelete: Restrict)
-  shifts       Shift[]
-  reservations Reservation[]
-  soldSales    ProductSale[]
+  store          Store          @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  shifts         Shift[]
+  reservations   Reservation[]
+  soldSales      ProductSale[]
+  loginHistories LoginHistory[]
 
   @@index([storeId])
+}
+
+// ログイン履歴（情報漏洩・不正アクセス検知用）。成功・失敗の両方を記録する。
+// 失敗時やアカウント削除後も「誰が狙われたか」を残したいので practitionerId は nullable + SetNull。
+// （監査ログは対象アカウント削除後も残すべきなので、例外的に SetNull。他テーブルの FK は Restrict 維持）
+model LoginHistory {
+  id                Int      @id @default(autoincrement())
+  practitionerId    Int?
+  usernameAttempted String // 試行されたユーザー名（失敗解析のため生で保存）
+  success           Boolean
+  ipAddress         String? // Caddy 経由のため x-forwarded-for から取得
+  userAgent         String?
+  createdAt         DateTime @default(now())
+
+  practitioner Practitioner? @relation(fields: [practitionerId], references: [id], onDelete: SetNull)
+
+  @@index([practitionerId, createdAt])
+  @@index([createdAt])
 }
 
 // メニュー

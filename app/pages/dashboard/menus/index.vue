@@ -4,6 +4,11 @@ import { menuBaseSchema, type MenuFormState } from '~~/shared/schemas/menu'
 
 definePageMeta({ layout: 'admin' })
 
+// 店舗スイッチャーのコンテキスト。
+// 管理者(全店)モード = 共通メニュー管理 / 店舗モード = 自店の店舗特別メニュー。
+const { selectedStoreId, canAccessAll, selectedStoreName } = useStoreContext()
+const isAdminView = computed(() => canAccessAll.value && selectedStoreId.value === null)
+
 const { data: menus, refresh, error } = await useFetch<Menu[]>('/api/admin/menus', {
   query: { status: 'all' },
 })
@@ -194,6 +199,19 @@ const errInput = 'border-red-600 focus:border-red-600 focus:shadow-[0_0_0_1px_#d
 
 <template>
   <div>
+    <!-- 店舗モード: 自店の店舗特別メニュー -->
+    <div v-if="!isAdminView">
+      <h1 class="text-2xl font-semibold text-slate-900 mb-1">
+        店舗特別メニュー
+      </h1>
+      <p class="text-sm text-slate-600 mb-4">
+        {{ selectedStoreName }} だけのメニューを管理します。全店共通のメニューは管理者モードの「共通メニュー管理」で扱います。
+      </p>
+      <AdminStoreMenusTab v-if="selectedStoreId" :store-id="selectedStoreId" />
+    </div>
+
+    <!-- 管理者(全店)モード: 共通メニュー管理 -->
+    <template v-else>
     <div class="flex items-center gap-3 mb-1">
       <h1 class="text-2xl font-semibold text-slate-900">
         メニュー管理
@@ -530,5 +548,6 @@ const errInput = 'border-red-600 focus:border-red-600 focus:shadow-[0_0_0_1px_#d
         </div>
       </template>
     </UModal>
+    </template>
   </div>
 </template>

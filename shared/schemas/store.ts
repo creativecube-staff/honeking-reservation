@@ -16,6 +16,8 @@ export const storeBaseSchema = z.object({
   name: z.string().min(1, '店舗名は必須です').max(100, '100 文字以内で入力してください'),
   address: z.string().min(1, '住所は必須です').max(200, '200 文字以内で入力してください'),
   phone: z.string().max(20, '20 文字以内で入力してください').nullable().optional(),
+  // 店舗の業務用メールアドレス（任意）。空欄は API 層で null 化してから検証するので、ここでは email 形式 or null を許容。
+  email: z.string().email('メールアドレスの形式が正しくありません').max(255, '255 文字以内で入力してください').nullable().optional(),
   displayOrder: z.number().int().min(0).max(9999),
   isActive: z.boolean(),
 })

@@ -6,6 +6,8 @@ export interface CalendarColumn {
   subLabel?: string
   /** ヘッダー文字色など、Tailwind クラスを直接指定 */
   headerClass?: string
+  /** 行/列の背景に付ける Tailwind クラス（曜日色など。未使用のコンポーネントでは無視） */
+  bgClass?: string
 }
 
 export interface CalendarRange {

@@ -36,6 +36,8 @@ export default defineEventHandler(async (event) => {
       displayName: staff.name,
       role: staff.role,
       permissions,
+      // 店舗スコープ判定用の所属店舗
+      storeId: staff.storeId,
     },
     loggedInAt: new Date().toISOString(),
   })

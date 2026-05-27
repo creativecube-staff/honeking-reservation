@@ -1,13 +1,21 @@
 import { prisma } from '../../../utils/prisma'
+import { parseStoreIdQuery, resolveStoreScope } from '../../../utils/storeScope'
 
 // ダッシュボード概要ウィジェット用のカウント + 店舗別売上集計
+//
+// 店舗スコープ:
+//   - OWNER は ?storeId 指定で各店、省略で全店舗集計
+//   - それ以外は所属店舗に固定（越権は 403）
+//   - storeId が null のとき = 全店舗
 //
 // 売上の定義:
 //   - 施術売上: CONFIRMED で VoucherUsage を持たない予約の menu.priceJpy 合計
 //     （回数券消費した予約は売上ゼロ。回数券販売日に計上済み）
 //   - 物販・回数券販売: ProductSale の unitPriceJpyAtSale × quantity 合計
 //   - 「終了時刻ベース」ではなく「予約開始日」「販売日」で集計する
-export default defineEventHandler(async () => {
+export default defineEventHandler(async (event) => {
+  const { storeId } = await resolveStoreScope(event, parseStoreIdQuery(getQuery(event).storeId))
+
   const now = new Date()
   const jstNow = new Date(now.getTime() + 9 * 3600_000)
   const y = jstNow.getUTCFullYear()
@@ -22,33 +30,43 @@ export default defineEventHandler(async () => {
   const monthStart = new Date(Date.UTC(y, m, 1, -9, 0, 0))
   const monthEnd = new Date(Date.UTC(y, m + 1, 1, -9, 0, 0))
 
+  // 店舗フィルタ断片。storeId が null（全店舗）なら何も絞らない。
+  const storeWhere = storeId ? { storeId } : {}
+  // メニューは「共通(storeId=null) + その店の特別」。全店舗時は全メニュー。
+  const menuWhere = storeId
+    ? { isActive: true, OR: [{ storeId: null }, { storeId }] }
+    : { isActive: true }
+  // 店舗一覧（売上バケットの土台）。スコープ時は対象店舗のみ。
+  const storeListWhere = storeId ? { id: storeId, isActive: true } : { isActive: true }
+
   const [storesActive, beds, staff, menus, holidaysFuture, todayReservations, weekReservations, upcomingConfirmed, storesList, monthMenuRevenueRows, monthSaleRevenueRows, todayMenuRevenueRows, todaySaleRevenueRows] = await Promise.all([
-    prisma.store.count({ where: { isActive: true } }),
-    prisma.bed.count({ where: { isActive: true } }),
-    prisma.practitioner.count({ where: { isActive: true, isAssignable: true } }),
-    prisma.menu.count({ where: { isActive: true } }),
-    prisma.holiday.count({ where: { date: { gte: todayStart } } }),
+    prisma.store.count({ where: storeListWhere }),
+    prisma.bed.count({ where: { isActive: true, ...storeWhere } }),
+    prisma.practitioner.count({ where: { isActive: true, isAssignable: true, ...storeWhere } }),
+    prisma.menu.count({ where: menuWhere }),
+    prisma.holiday.count({ where: { date: { gte: todayStart }, ...storeWhere } }),
     prisma.reservation.count({
-      where: { status: 'CONFIRMED', startAt: { gte: todayStart, lt: todayEnd } },
+      where: { status: 'CONFIRMED', startAt: { gte: todayStart, lt: todayEnd }, ...storeWhere },
     }),
     prisma.reservation.count({
-      where: { status: 'CONFIRMED', startAt: { gte: weekStart, lt: weekEnd } },
+      where: { status: 'CONFIRMED', startAt: { gte: weekStart, lt: weekEnd }, ...storeWhere },
     }),
     prisma.reservation.count({
-      where: { status: 'CONFIRMED', startAt: { gte: now } },
+      where: { status: 'CONFIRMED', startAt: { gte: now }, ...storeWhere },
     }),
-    prisma.store.findMany({ where: { isActive: true }, orderBy: { displayOrder: 'asc' }, select: { id: true, name: true } }),
+    prisma.store.findMany({ where: storeListWhere, orderBy: { displayOrder: 'asc' }, select: { id: true, name: true } }),
     // 今月の施術売上候補: CONFIRMED かつ回数券消費なし
     prisma.reservation.findMany({
       where: {
         status: 'CONFIRMED',
         startAt: { gte: monthStart, lt: monthEnd },
         voucherUsage: { is: null },
+        ...storeWhere,
       },
       select: { storeId: true, menu: { select: { priceJpy: true } } },
     }),
     prisma.productSale.findMany({
-      where: { soldAt: { gte: monthStart, lt: monthEnd } },
+      where: { soldAt: { gte: monthStart, lt: monthEnd }, ...storeWhere },
       select: { storeId: true, quantity: true, unitPriceJpyAtSale: true },
     }),
     prisma.reservation.findMany({
@@ -56,11 +74,12 @@ export default defineEventHandler(async () => {
         status: 'CONFIRMED',
         startAt: { gte: todayStart, lt: todayEnd },
         voucherUsage: { is: null },
+        ...storeWhere,
       },
       select: { storeId: true, menu: { select: { priceJpy: true } } },
     }),
     prisma.productSale.findMany({
-      where: { soldAt: { gte: todayStart, lt: todayEnd } },
+      where: { soldAt: { gte: todayStart, lt: todayEnd }, ...storeWhere },
       select: { storeId: true, quantity: true, unitPriceJpyAtSale: true },
     }),
   ])

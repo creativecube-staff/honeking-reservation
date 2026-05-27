@@ -5,6 +5,9 @@ definePageMeta({ layout: 'admin' })
 
 const { user } = useUserSession()
 
+// ヘッダーの店舗スイッチャーで選択中の店舗。null = 全店舗
+const { selectedStoreId } = useStoreContext()
+
 type RevenueBucket = {
   storeId: number
   storeName: string
@@ -51,11 +54,15 @@ function yen(n: number): string { return n.toLocaleString('ja-JP') }
 const today = todayYmd()
 
 // 概要（件数・売上）
-const { data: summary, error } = await useFetch<Summary>('/api/admin/dashboard/summary')
+const { data: summary, error } = await useFetch<Summary>('/api/admin/dashboard/summary', {
+  query: computed(() => ({ storeId: selectedStoreId.value ?? '' })),
+  watch: [selectedStoreId],
+})
 
 // 本日の予約一覧（主役テーブル用）。件数は多くないので pageSize=100 で十分
 const { data: todayRes, error: todayResError } = await useFetch<ReservationListResponse>('/api/admin/reservations', {
-  query: { from: today, to: today, pageSize: 100 },
+  query: computed(() => ({ from: today, to: today, pageSize: 100, storeId: selectedStoreId.value ?? '' })),
+  watch: [selectedStoreId],
 })
 
 // キャンセルを除き、開始時刻の昇順で並べる

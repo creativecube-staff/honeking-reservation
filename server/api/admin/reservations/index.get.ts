@@ -2,6 +2,7 @@ import type { Prisma } from '@prisma/client'
 import { decryptUtf8 } from '../../../utils/crypto'
 import { hashEmail, hashName, hashPhone } from '../../../utils/hash'
 import { prisma } from '../../../utils/prisma'
+import { parseStoreIdQuery, resolveStoreScope } from '../../../utils/storeScope'
 
 // 管理画面: 予約一覧
 // クエリ:
@@ -20,8 +21,8 @@ import { prisma } from '../../../utils/prisma'
 // 顧客名は復号して返す（管理画面なので OK）
 export default defineEventHandler(async (event) => {
   const query = getQuery(event)
-  const storeIdRaw = typeof query.storeId === 'string' ? Number(query.storeId) : null
-  const storeId = Number.isInteger(storeIdRaw) && storeIdRaw && storeIdRaw > 0 ? storeIdRaw : null
+  // 店舗スコープ: OWNER は ?storeId で各店 / 省略で全店。それ以外は所属店舗に固定（越権は403）
+  const { storeId } = await resolveStoreScope(event, parseStoreIdQuery(query.storeId))
   const bedIdRaw = typeof query.bedId === 'string' ? Number(query.bedId) : null
   const bedId = Number.isInteger(bedIdRaw) && bedIdRaw && bedIdRaw > 0 ? bedIdRaw : null
   const customerIdRaw = typeof query.customerId === 'string' ? Number(query.customerId) : null

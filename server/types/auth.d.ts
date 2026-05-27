@@ -15,6 +15,9 @@ declare module '#auth-utils' {
     displayName: string
     role: RoleName
     permissions: Permission[]
+    // 所属店舗(Practitioner.storeId)。店舗スコープ(アクセス境界)の判定に使う。
+    // OWNER は全店アクセスのため storeId は「ホーム店舗」程度の意味。
+    storeId: number
   }
 
   // 会員（お客様）セッション

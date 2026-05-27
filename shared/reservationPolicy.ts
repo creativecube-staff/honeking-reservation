@@ -12,3 +12,17 @@
  * - サーバ側(api/availability, api/reservations): 直接 URL や API を叩かれた場合のガード
  */
 export const MAX_ADVANCE_DAYS = 180
+
+/**
+ * お客様が予約開始時刻を選べる「刻み」(分)。
+ *
+ * Why: Hot Pepper Beauty 等の予約サイトに合わせて 15 分刻みにする。
+ * メニュー所要時間や営業時間は任意の分単位に対応済みで、空き計算
+ * (api/availability) もダブルブッキング制約(DB の EXCLUDE)も実際の
+ * 時間帯の重なりで判定するため、この値を変えるだけで刻みを変更できる。
+ *
+ * 適用箇所:
+ * - サーバ側(api/availability): 空き枠候補を生成する刻み
+ * - クライアント側(DateTimeStep): 表示する時刻行はサーバの slots に追従するため直接は参照しないが、刻みの基準値としてここで一元管理する
+ */
+export const SLOT_STEP_MINUTES = 15

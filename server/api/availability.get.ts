@@ -1,4 +1,4 @@
-import { MAX_ADVANCE_DAYS } from '~~/shared/reservationPolicy'
+import { MAX_ADVANCE_DAYS, SLOT_STEP_MINUTES } from '~~/shared/reservationPolicy'
 import { prisma } from '../utils/prisma'
 
 // お客様側: 指定店舗・指定メニューの空き枠を期間で返す。
@@ -11,13 +11,11 @@ import { prisma } from '../utils/prisma'
 //    - PublicHoliday なら日曜扱い、そうでなければ getUTCDay()
 //    - Holiday に該当なら slots 空
 //    - その曜日の BusinessHour レンジを取得
-//    - 各レンジ内で 30 分刻みのスロット候補を生成し、メニュー時間 + 制約をすべて満たすものだけ採用
+//    - 各レンジ内で SLOT_STEP_MINUTES 分刻みのスロット候補を生成し、メニュー時間 + 制約をすべて満たすものだけ採用
 //      - スロット範囲が Closure と重ならない
 //      - 空きベッドが 1 つ以上存在
 //      - その店舗で勤務するスタッフのうち、シフトが [start, end] を含み、かつ
 //        その時間に他の予約が無いスタッフが 1 名以上存在
-
-const SLOT_STEP_MIN = 30
 
 function pad(n: number): string {
   return String(n).padStart(2, '0')
@@ -240,8 +238,8 @@ export default defineEventHandler(async (event) => {
     const slots: SlotOut[] = []
 
     for (const range of ranges) {
-      // スロット候補は SLOT_STEP_MIN 刻み
-      for (let s = range.startMin; s + menu.durationMinutes <= range.endMin; s += SLOT_STEP_MIN) {
+      // スロット候補は SLOT_STEP_MINUTES 刻み
+      for (let s = range.startMin; s + menu.durationMinutes <= range.endMin; s += SLOT_STEP_MINUTES) {
         const e = s + menu.durationMinutes
         // Closure と重なるなら不可（時間軸的にも候補から外す）
         if (overlapsAny(dayClosures, s, e)) continue

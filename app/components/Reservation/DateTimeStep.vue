@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // 予約フロー(SPA) ステップ 2/3: 日時選択(時刻×曜日グリッド)
-import { MAX_ADVANCE_DAYS } from '~~/shared/reservationPolicy'
+import { MAX_ADVANCE_DAYS, SLOT_STEP_MINUTES } from '~~/shared/reservationPolicy'
 type Store = {
   id: number
   slug: string
@@ -82,25 +82,56 @@ function parseHm(s: string): number {
   const [h, m] = s.split(':').map(Number)
   return (h ?? 0) * 60 + (m ?? 0)
 }
-function formatHm(min: number): string {
-  return `${pad(Math.floor(min / 60))}:${pad(min % 60)}`
+
+// 表示する時刻行 = 全日の実スロット時刻の和集合(昇順)。
+// サーバ(api/availability)が営業レンジ内の候補だけを SLOT_STEP_MINUTES 刻みで返すため、
+// 中休み(12:30-15:00)や営業時間外はそもそも slot に含まれず、空行が自動的に畳まれる。
+// 刻みもサーバに追従するので、ここで刻みを再計算する必要はない。
+const timeRows = computed<string[]>(() => {
+  const set = new Set<string>()
+  for (const day of availability.value ?? []) {
+    for (const slot of day.slots) set.add(slot.time)
+  }
+  return [...set].sort((a, b) => parseHm(a) - parseHm(b))
+})
+
+// 直前の時刻行との差が刻み(SLOT_STEP_MINUTES)より大きい = 中抜け休憩などで時刻が飛ぶ位置。
+// その手前に休憩の区切り行を入れ、急にジャンプする違和感を消す。
+function hasBreakBefore(idx: number): boolean {
+  if (idx <= 0) return false
+  const prev = timeRows.value[idx - 1]
+  const cur = timeRows.value[idx]
+  if (prev === undefined || cur === undefined) return false
+  return parseHm(cur) - parseHm(prev) > SLOT_STEP_MINUTES
 }
 
-const timeRows = computed<string[]>(() => {
-  let earliest = Infinity
-  let latest = -Infinity
-  for (const day of availability.value ?? []) {
-    if (day.openTime) earliest = Math.min(earliest, parseHm(day.openTime))
-    if (day.closeTime) latest = Math.max(latest, parseHm(day.closeTime))
-  }
-  if (!Number.isFinite(earliest) || !Number.isFinite(latest)) return []
-  const duration = props.menu.durationMinutes
-  const result: string[] = []
-  for (let t = earliest; t + duration <= latest; t += 30) {
-    result.push(formatHm(t))
-  }
-  return result
-})
+// 正時(分が 00)かどうか。時刻カラムで正時だけ大きく見せ、時間の塊を掴みやすくする。
+function isHourStart(time: string): boolean {
+  return parseHm(time) % 60 === 0
+}
+
+// 直後の行が正時 = 1時間の区切り。区切りは実線、時間内(:15/:30/:45)は点線にして「1時間=1ボックス」に見せる。
+function hourDivBelow(idx: number): boolean {
+  const next = timeRows.value[idx + 1]
+  if (next === undefined) return false // 最終行は外枠コンテナで閉じる
+  if (hasBreakBefore(idx + 1)) return false // 休憩行が区切るので不要
+  return isHourStart(next)
+}
+function rowBottomClass(idx: number): string {
+  return hourDivBelow(idx)
+    ? 'border-b border-b-slate-300 [border-bottom-style:solid]'
+    : 'border-b border-b-slate-200 [border-bottom-style:dotted]'
+}
+
+// 列の薄い背景: 今日=オレンジ(最優先) / 土曜=青 / 日曜=赤。
+function dayBgClass(ymd: string): string {
+  if (ymd === todayYmd()) return 'bg-orange-50/60'
+  const [y, m, d] = ymd.split('-').map(Number)
+  const dow = new Date(y!, m! - 1, d!).getDay()
+  if (dow === 0) return 'bg-red-50/40'
+  if (dow === 6) return 'bg-blue-50/40'
+  return ''
+}
 
 const now = ref(new Date())
 let nowTimer: ReturnType<typeof setInterval> | null = null
@@ -329,16 +360,37 @@ function dayClosedReason(day: DayAvail): string | null {
               この週は予約可能な時間がありません。「次の週 →」をお試しください。
             </td>
           </tr>
-          <tr v-for="time in timeRows" :key="time" class="hover:bg-slate-50/50">
-            <th class="sticky left-0 z-10 bg-white px-2 py-1.5 text-xs font-semibold text-slate-700 border-b border-r border-slate-200 tabular-nums">
+          <template v-for="(time, idx) in timeRows" :key="time">
+            <!-- 中抜け休憩で時刻が飛ぶ箇所に区切りを入れ、急にジャンプする違和感を消す -->
+            <tr v-if="hasBreakBefore(idx)" aria-hidden="true">
+              <td
+                :colspan="(availability ?? []).length + 1"
+                class="bg-slate-50 border-y border-slate-200 py-1.5 select-none"
+              >
+                <span class="flex items-center justify-center gap-2 text-[11px] font-semibold tracking-[0.2em] text-slate-500">
+                  <span class="h-px w-8 bg-slate-300" />
+                  休憩
+                  <span class="h-px w-8 bg-slate-300" />
+                </span>
+              </td>
+            </tr>
+            <tr class="hover:bg-slate-50/50">
+            <th
+              class="sticky left-0 z-10 bg-white px-2 py-1.5 border-r border-r-slate-200 [border-right-style:dotted] tabular-nums"
+              :class="[
+                isHourStart(time) ? 'text-sm font-bold text-slate-900' : 'text-xs font-medium text-slate-600',
+                rowBottomClass(idx),
+              ]"
+            >
               {{ time }}
             </th>
             <td
               v-for="day in (availability ?? [])"
               :key="day.date"
-              class="px-0.5 py-0 text-center border-b border-r border-slate-200 last:border-r-0"
+              class="px-0.5 py-0 text-center border-r border-r-slate-200 [border-right-style:dotted] last:border-r-0"
               :class="[
-                dayHeader(day.date).isToday ? 'bg-orange-50/60' : '',
+                dayBgClass(day.date),
+                rowBottomClass(idx),
                 statusFor(day, time) === 'closed' ? 'bg-slate-100' : '',
                 statusFor(day, time) === 'past' ? 'bg-slate-50' : '',
                 statusFor(day, time) === 'fullyBooked' ? 'bg-amber-50' : '',
@@ -387,7 +439,8 @@ function dayClosedReason(day: DayAvail): string | null {
                 ―
               </span>
             </td>
-          </tr>
+            </tr>
+          </template>
         </tbody>
       </table>
     </div>

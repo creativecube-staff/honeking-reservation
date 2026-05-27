@@ -93,11 +93,12 @@ admin.honeking.localhost {
 	# /api/_* は Nuxt UI のアイコン API（/api/_nuxt_icon）等のフレームワーク内部 API。
 	# 将来 Nuxt モジュールが追加する内部 API も /api/_xxx という命名規約なので一括許可。
 	# /admin-favicon-* は管理画面のモノクロファビコン（public/admin-favicon-*.png）。
+	# /honeking-logo-* は管理画面ログインのカラーロゴ（public/honeking-logo-*.png）。
 	@admin_allowed path /login \
 		/dashboard /dashboard/* \
 		/api/admin /api/admin/* /api/_* \
 		/_nuxt* /__nuxt* /_payload* /_ipx* /__vite* \
-		/favicon.ico /robots.txt /apple-touch-icon.png /admin-favicon-*
+		/favicon.ico /robots.txt /apple-touch-icon.png /admin-favicon-* /honeking-logo-*
 	handle @admin_allowed {
 		import nuxt_upstream
 	}

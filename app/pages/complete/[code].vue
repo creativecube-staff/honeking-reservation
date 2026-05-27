@@ -62,7 +62,7 @@ function yen(n: number): string {
   return n.toLocaleString('ja-JP')
 }
 
-useHead({ title: '予約完了 | honeking 予約' })
+useHead({ title: '予約完了 | ほねキング整骨院 予約' })
 </script>
 
 <template>

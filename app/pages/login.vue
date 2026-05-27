@@ -19,7 +19,7 @@ definePageMeta({ layout: false })
 // admin layout の指定とパスを揃えること(public/admin-favicon-*.png)。
 useHead({
   title: isAdminHost.value
-    ? 'ログイン | honeking 管理画面'
+    ? 'ログイン | ほねキング整骨院 管理画面'
     : 'ログイン | ほねキング整骨院 予約',
   link: isAdminHost.value
     ? [

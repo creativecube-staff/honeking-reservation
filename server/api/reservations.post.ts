@@ -138,10 +138,17 @@ export default defineEventHandler(async (event) => {
   const ranges = businessHours
     .filter(b => b.dayOfWeek === effectiveDow)
     .map(b => ({ startMin: parseHm(b.startTime), endMin: parseHm(b.endTime) }))
+    .sort((a, b) => a.startMin - b.startMin)
   if (ranges.length === 0) {
     throw createError({ statusCode: 409, statusMessage: 'この日は営業していません' })
   }
-  const fitsRange = ranges.some(r => r.startMin <= startMin && endMin <= r.endMin)
+  // 最終レンジ(=閉店)は「最終受付」扱い: 開始が閉店時刻までならOK(施術は閉店後にはみ出てよい)。
+  // 中休み前のレンジは施術が休憩前に終わる必要がある。availability.get.ts と判定を揃えること。
+  const lastRange = ranges[ranges.length - 1]!
+  const fitsRange = ranges.some(r =>
+    r.startMin <= startMin
+    && (r === lastRange ? startMin <= r.endMin : endMin <= r.endMin),
+  )
   if (!fitsRange) {
     throw createError({ statusCode: 400, statusMessage: '営業時間外です' })
   }
@@ -180,7 +187,8 @@ export default defineEventHandler(async (event) => {
     if (usedPractitioners.has(p.id)) return false
     const sh = shiftMap.get(p.id)
     if (!sh) return false
-    return sh.startMin <= startMin && endMin <= sh.endMin
+    // 開始時刻に出勤していれば担当可(施術がシフト終了をはみ出しても最後まで対応する想定。availability と揃える)
+    return sh.startMin <= startMin && startMin <= sh.endMin
   })
   if (!availablePractitioner) {
     throw createError({ statusCode: 409, statusMessage: '空いている施術者がいません' })

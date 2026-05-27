@@ -12,9 +12,11 @@ import { prisma } from '../utils/prisma'
 //    - Holiday に該当なら slots 空
 //    - その曜日の BusinessHour レンジを取得
 //    - 各レンジ内で SLOT_STEP_MINUTES 分刻みのスロット候補を生成し、メニュー時間 + 制約をすべて満たすものだけ採用
+//      - 1 日の最後のレンジ(=閉店)は「最終受付」扱い: 開始が閉店時刻までならOK(施術は閉店後にはみ出てよい)。
+//        中休み前のレンジは従来どおり施術が休憩前に終わる枠のみ
 //      - スロット範囲が Closure と重ならない
 //      - 空きベッドが 1 つ以上存在
-//      - その店舗で勤務するスタッフのうち、シフトが [start, end] を含み、かつ
+//      - その店舗で勤務するスタッフのうち、開始時刻にシフトに入っており(施術がシフト終了をはみ出しても可)、
 //        その時間に他の予約が無いスタッフが 1 名以上存在
 
 function pad(n: number): string {
@@ -237,9 +239,13 @@ export default defineEventHandler(async (event) => {
     const dayClosures = closuresByDate.get(ymd) ?? []
     const slots: SlotOut[] = []
 
-    for (const range of ranges) {
+    // 最終レンジ(=閉店)は「最終受付」扱いで開始が閉店時刻までOK、それ以外は施術が休憩前に終わる枠のみ
+    for (let ri = 0; ri < ranges.length; ri++) {
+      const range = ranges[ri]!
+      const isLastRange = ri === ranges.length - 1
+      const maxStart = isLastRange ? range.endMin : range.endMin - menu.durationMinutes
       // スロット候補は SLOT_STEP_MINUTES 刻み
-      for (let s = range.startMin; s + menu.durationMinutes <= range.endMin; s += SLOT_STEP_MINUTES) {
+      for (let s = range.startMin; s <= maxStart; s += SLOT_STEP_MINUTES) {
         const e = s + menu.durationMinutes
         // Closure と重なるなら不可（時間軸的にも候補から外す）
         if (overlapsAny(dayClosures, s, e)) continue
@@ -251,12 +257,13 @@ export default defineEventHandler(async (event) => {
           if (!overlapsAny(rs, s, e)) freeBeds++
         }
 
-        // 空きスタッフ数（当店勤務 + シフトが含む + 他予約と被らない）
+        // 空きスタッフ数（当店勤務 + 開始時刻に出勤 + 他予約と被らない）
         let freeStaff = 0
         for (const p of practitioners) {
           const shift = shiftsByDateStaff.get(`${ymd}:${p.id}`)
           if (!shift) continue
-          if (shift.startMin > s || shift.endMin < e) continue
+          // 開始時刻に出勤していれば担当可(施術がシフト終了をはみ出しても最後まで対応する想定)
+          if (shift.startMin > s || shift.endMin < s) continue
           const rs = reservationsByDateStaff.get(`${ymd}:${p.id}`) ?? []
           if (overlapsAny(rs, s, e)) continue
           freeStaff++

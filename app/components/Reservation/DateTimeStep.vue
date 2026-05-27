@@ -68,6 +68,9 @@ const maxLastYmd = computed(() => addDays(todayYmd(), MAX_ADVANCE_DAYS - 1))
 const maxRangeFrom = computed(() => addDays(maxLastYmd.value, -(WEEK_DAYS - 1)))
 const canGoNext = computed(() => rangeFrom.value < maxRangeFrom.value)
 
+// 週の範囲ラベル(コンパクト): 2026/06/03 – 06/09 (終了側は年を省略して SP でも収まるように)
+const rangeLabel = computed(() => `${rangeFrom.value.replace(/-/g, '/')} – ${rangeTo.value.slice(5).replace('-', '/')}`)
+
 const { data: availability, status, error: availError } = await useFetch<DayAvail[]>('/api/availability', {
   query: computed(() => ({
     slug: props.store.slug,
@@ -260,34 +263,40 @@ function dayClosedReason(day: DayAvail): string | null {
       </div>
     </div>
 
-    <div class="flex items-center justify-between mb-3 gap-2 flex-wrap">
-      <button
-        type="button"
-        class="px-3 py-1.5 text-sm rounded-md border border-slate-300 bg-white hover:bg-slate-50 disabled:opacity-40 cursor-pointer"
-        :disabled="rangeFrom <= todayYmd()"
-        @click="shiftRange(-WEEK_DAYS)"
-      >
-        ← 前の週
-      </button>
-      <span class="text-sm text-slate-700 tabular-nums font-semibold">
-        {{ rangeFrom.replace(/-/g, '/') }} – {{ rangeTo.replace(/-/g, '/') }}
-      </span>
-      <div class="flex gap-2">
+    <div class="mb-3">
+      <!-- 前後ナビ: 両端に矢印・中央に日付。SP では矢印だけにして日付の幅を確保 -->
+      <div class="flex items-center justify-between gap-2">
         <button
           type="button"
-          class="px-3 py-1.5 text-sm rounded-md border border-slate-300 bg-white hover:bg-slate-50 disabled:opacity-40 cursor-pointer"
-          :disabled="rangeFrom === todayYmd()"
-          @click="resetToThisWeek"
+          class="shrink-0 px-3 py-1.5 text-sm rounded-md border border-slate-300 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+          :disabled="rangeFrom <= todayYmd()"
+          @click="shiftRange(-WEEK_DAYS)"
         >
-          今週
+          <span class="hidden sm:inline">← 前の週</span>
+          <span class="sm:hidden">←</span>
         </button>
+        <span class="text-sm sm:text-base text-slate-800 tabular-nums font-semibold text-center">
+          {{ rangeLabel }}
+        </span>
         <button
           type="button"
-          class="px-3 py-1.5 text-sm rounded-md border border-slate-300 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+          class="shrink-0 px-3 py-1.5 text-sm rounded-md border border-slate-300 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
           :disabled="!canGoNext"
           @click="shiftRange(WEEK_DAYS)"
         >
-          次の週 →
+          <span class="hidden sm:inline">次の週 →</span>
+          <span class="sm:hidden">→</span>
+        </button>
+      </div>
+      <!-- 「今週に戻る」は今週以外を見ているときだけ中央下に小さく出す -->
+      <div v-if="rangeFrom !== todayYmd()" class="mt-1.5 flex justify-center">
+        <button
+          type="button"
+          class="inline-flex items-center gap-1 rounded-full border border-orange-300 bg-orange-50 px-3 py-1 text-xs font-medium text-orange-700 hover:bg-orange-100 cursor-pointer"
+          @click="resetToThisWeek"
+        >
+          <UIcon name="i-lucide-rotate-ccw" class="size-3" />
+          今週に戻る
         </button>
       </div>
     </div>
@@ -315,17 +324,17 @@ function dayClosedReason(day: DayAvail): string | null {
       空き状況を取得できませんでした。
     </div>
 
-    <div v-else class="overflow-x-auto rounded-lg border border-slate-300 bg-white shadow-sm">
-      <table class="w-full text-sm border-collapse">
+    <div v-else class="-mx-4 sm:mx-0 overflow-x-auto rounded-none sm:rounded-lg border-y border-x-0 sm:border-x border-slate-300 bg-white shadow-sm">
+      <table class="w-full table-fixed text-sm border-collapse">
         <thead>
           <tr class="bg-slate-50">
-            <th class="sticky left-0 z-10 bg-slate-50 px-2 py-2 text-xs font-semibold text-slate-600 border-b border-r border-slate-300 w-16">
+            <th class="sticky left-0 z-10 bg-slate-50 px-1 py-2 text-xs font-semibold text-slate-600 border-b border-r border-slate-300 w-14 sm:w-16">
               時刻
             </th>
             <th
               v-for="day in (availability ?? [])"
               :key="day.date"
-              class="px-1 py-2 text-center border-b border-r border-slate-300 last:border-r-0 min-w-[64px]"
+              class="px-0.5 py-2 text-center border-b border-r border-slate-300 last:border-r-0"
               :class="dayHeader(day.date).isToday ? 'bg-orange-200 ring-2 ring-orange-500 ring-inset' : ''"
             >
               <div class="text-[11px] font-semibold" :class="dayHeader(day.date).dowColor">
@@ -376,7 +385,7 @@ function dayClosedReason(day: DayAvail): string | null {
             </tr>
             <tr class="hover:bg-slate-50/50">
             <th
-              class="sticky left-0 z-10 bg-white px-2 py-1.5 border-r border-r-slate-200 [border-right-style:dotted] tabular-nums"
+              class="sticky left-0 z-10 bg-white px-1 py-1.5 border-r border-r-slate-200 [border-right-style:dotted] tabular-nums whitespace-nowrap"
               :class="[
                 isHourStart(time) ? 'text-sm font-bold text-slate-900' : 'text-xs font-medium text-slate-600',
                 rowBottomClass(idx),

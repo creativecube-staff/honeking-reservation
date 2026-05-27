@@ -137,7 +137,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="mx-auto max-w-5xl px-4 sm:px-6 py-8">
+  <div class="mx-auto max-w-5xl px-4 sm:px-6 py-8 overflow-x-hidden">
     <ReservationStepIndicator
       :current="currentStepNumber"
       class="mb-6"
@@ -189,10 +189,8 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.step-container {
-  /* スライド中に隣のステップが見えないようにクリップ */
-  overflow-x: hidden;
-}
+/* スライド中のクリップは親ラッパー(.overflow-x-hidden)側で行う。
+   ここで overflow-x:hidden すると、日時カレンダーの SP フルブリード(-mx-4)が切れてしまうため設定しない。 */
 
 /* 進む(右から入る・左へ出る) */
 .slide-fwd-enter-active,

@@ -178,12 +178,12 @@ async function logout() {
                   v-for="item in navItems"
                   :key="item.to"
                   :to="item.to"
-                  class="admin-nav-tab flex items-center gap-1.5 rounded-t-md border-x border-t px-3.5 py-2 text-sm font-bold whitespace-nowrap transition-colors"
+                  class="admin-nav-tab flex items-center gap-1 rounded-t-md border-x border-t px-2.5 py-1.5 text-xs font-semibold whitespace-nowrap transition-colors"
                   :class="isActive(item.to)
                     ? 'admin-nav-tab--active border-orange-500 bg-gradient-to-b from-orange-500 to-orange-600 text-white shadow-sm'
                     : 'border-orange-500 bg-gradient-to-b from-slate-50 to-slate-200 text-orange-600 hover:from-orange-500 hover:to-orange-600 hover:text-white'"
                 >
-                  <UIcon :name="item.icon" class="admin-nav-tab__icon size-4 flex-shrink-0" />
+                  <UIcon :name="item.icon" class="admin-nav-tab__icon size-3.5 flex-shrink-0" />
                   <span class="admin-nav-tab__label">{{ item.label }}</span>
                 </NuxtLink>
               </TransitionGroup>
@@ -194,10 +194,10 @@ async function logout() {
             <div class="account-menu group relative flex shrink-0 items-end pl-1">
               <button
                 type="button"
-                class="account-menu-button flex items-center rounded-t-md border-x border-t border-orange-500 bg-slate-100 px-3 py-2 text-orange-600 transition-colors group-hover:bg-orange-600 group-hover:text-white group-focus-within:bg-orange-600 group-focus-within:text-white"
+                class="account-menu-button flex items-center rounded-t-md border-x border-t border-orange-500 bg-slate-100 px-2 py-1.5 text-orange-600 transition-colors group-hover:bg-orange-600 group-hover:text-white group-focus-within:bg-orange-600 group-focus-within:text-white"
                 aria-label="アカウントメニュー"
               >
-                <UIcon name="i-lucide-chevron-down" class="size-4" />
+                <UIcon name="i-lucide-chevron-down" class="size-3.5" />
               </button>
               <div class="absolute right-0 top-full z-50 hidden min-w-48 overflow-hidden rounded-md border border-slate-200 bg-white shadow-lg group-hover:block group-focus-within:block">
                 <!-- アカウント情報（名前 + 役職） -->

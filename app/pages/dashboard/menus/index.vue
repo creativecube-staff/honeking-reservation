@@ -12,9 +12,9 @@ const { selectedStoreId, canAccessAll, selectedStoreName } = useStoreContext()
   <div>
     <!-- 店舗選択中 = その店舗の特別メニュー -->
     <div v-if="selectedStoreId != null">
-      <AdminDetailHeader title="店舗特別メニュー">
+      <AdminDetailHeader title="メニュー管理">
         <template #description>
-          店舗の特別メニューを管理します。全店共通のメニューは管理者にお問い合わせください。
+          店舗特別メニュー（その店舗のキャンペーン・独自施術など）を管理します。
         </template>
       </AdminDetailHeader>
       <AdminMenuManager :store-id="selectedStoreId" />

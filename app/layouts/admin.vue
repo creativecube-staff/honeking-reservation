@@ -53,14 +53,15 @@ const adminNavItems: ReadonlyArray<NavItem> = [
 
 // 店舗モードのタブ。日々のオペレーション中心。
 // 店舗マスタ系（基本情報・ベッド・営業時間・店休日・祝日）は管理者モード専用に集約済み。
+// ラベルは末尾「管理」で統一する（管理者モードのナビとも揃える）。
 const storeNavItems: ReadonlyArray<NavItem> = [
   // ダッシュボードはロゴクリックで戻れるため、タブには出さない
-  { icon: 'i-lucide-calendar-check', label: '予約・販売', to: '/dashboard/reservations', permission: 'reservation:view' },
-  { icon: 'i-lucide-users', label: '顧客', to: '/dashboard/customers', permission: 'customer:view' },
-  { icon: 'i-lucide-user-round', label: 'スタッフ', to: '/dashboard/staff', permission: 'staff:view' },
-  { icon: 'i-lucide-clipboard-list', label: 'メニュー', to: '/dashboard/menus', permission: 'menu:view' },
-  { icon: 'i-lucide-package', label: '商品', to: '/dashboard/products', permission: 'product:view' },
-  { icon: 'i-lucide-trending-up', label: '売上', to: '/dashboard/sales', permission: 'sale:view' },
+  { icon: 'i-lucide-calendar-check', label: '予約管理', to: '/dashboard/reservations', permission: 'reservation:view' },
+  { icon: 'i-lucide-users', label: 'お客様管理', to: '/dashboard/customers', permission: 'customer:view' },
+  { icon: 'i-lucide-user-round', label: 'スタッフ管理', to: '/dashboard/staff', permission: 'staff:view' },
+  { icon: 'i-lucide-clipboard-list', label: 'メニュー管理', to: '/dashboard/menus', permission: 'menu:view' },
+  { icon: 'i-lucide-package', label: '商品管理', to: '/dashboard/products', permission: 'product:view' },
+  { icon: 'i-lucide-trending-up', label: '売上管理', to: '/dashboard/sales', permission: 'sale:view' },
   // ヘルプはタブには出さず、右端 ▼ のアカウントメニューに含める
 ]
 

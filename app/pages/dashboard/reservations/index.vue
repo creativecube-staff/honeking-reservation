@@ -126,6 +126,9 @@ function applySearch() {
   qFilter.value = qInput.value.trim()
 }
 
+// ヘッダーの店舗スイッチャーの選択中店舗（スケジュールビューで使う）
+const { selectedStoreId } = useStoreContext()
+
 // ── データ ──────────────────────────────────────────
 const { data: stores } = await useFetch<Store[]>('/api/admin/stores', {
   query: { status: 'active' },
@@ -211,13 +214,14 @@ async function onSaleAdded() {
 }
 
 // ── ビュー切替（一覧 / スケジュール） ─────────────────
+// 初期表示は「スケジュール」。一覧に切り替えるときだけ ?view=list を URL に載せる
 type ViewMode = 'list' | 'schedule'
 const viewMode = computed<ViewMode>({
   get() {
-    return route.query.view === 'schedule' ? 'schedule' : 'list'
+    return route.query.view === 'list' ? 'list' : 'schedule'
   },
   set(v) {
-    router.replace({ query: { ...route.query, view: v === 'list' ? undefined : v, page: undefined } })
+    router.replace({ query: { ...route.query, view: v === 'schedule' ? undefined : v, page: undefined } })
   },
 })
 
@@ -244,131 +248,85 @@ function goToday() { scheduleDate.value = todayYmd() }
 
 <template>
   <div>
-    <div class="flex items-center gap-3 mb-1 flex-wrap">
-      <h1 class="text-2xl font-semibold text-slate-900">
-        予約・販売管理
-      </h1>
-      <div class="ml-auto flex items-center gap-2 flex-wrap">
-        <!-- ビュー切替トグル -->
-        <div class="inline-flex border border-[#8c8f94] rounded-sm overflow-hidden text-sm">
+    <div class="flex items-center justify-between mb-4 gap-3 flex-wrap">
+      <div class="flex items-center gap-2 flex-wrap">
+        <!-- ビュー切替（タブ風・スライドする下線インジケータ） -->
+        <div class="relative inline-grid grid-cols-2 border-b border-slate-200 text-base">
           <button
             type="button"
-            class="px-3 py-1.5 inline-flex items-center gap-1"
-            :class="viewMode === 'list' ? 'bg-orange-500 text-white' : 'bg-white text-slate-700 hover:bg-[#f6f7f7]'"
-            @click="viewMode = 'list'"
-          >
-            <UIcon name="i-lucide-list" class="size-3.5" />
-            一覧
-          </button>
-          <button
-            type="button"
-            class="px-3 py-1.5 border-l border-[#8c8f94] inline-flex items-center gap-1"
-            :class="viewMode === 'schedule' ? 'bg-orange-500 text-white' : 'bg-white text-slate-700 hover:bg-[#f6f7f7]'"
+            class="relative px-6 py-3 inline-flex items-center justify-center gap-2 transition-colors duration-200 cursor-pointer select-none group tracking-tight"
+            :class="viewMode === 'schedule' ? 'text-orange-600 font-bold' : 'text-slate-500 hover:text-slate-800 font-semibold'"
             @click="viewMode = 'schedule'"
           >
-            <UIcon name="i-lucide-calendar-days" class="size-3.5" />
+            <UIcon
+              name="i-lucide-calendar-days"
+              class="size-5 transition-transform duration-300 ease-out group-hover:scale-110"
+              :class="viewMode === 'schedule' ? 'scale-110' : ''"
+            />
             スケジュール
           </button>
+          <button
+            type="button"
+            class="relative px-6 py-3 inline-flex items-center justify-center gap-2 transition-colors duration-200 cursor-pointer select-none group tracking-tight"
+            :class="viewMode === 'list' ? 'text-orange-600 font-bold' : 'text-slate-500 hover:text-slate-800 font-semibold'"
+            @click="viewMode = 'list'"
+          >
+            <UIcon
+              name="i-lucide-list"
+              class="size-5 transition-transform duration-300 ease-out group-hover:scale-110"
+              :class="viewMode === 'list' ? 'scale-110' : ''"
+            />
+            予約一覧
+          </button>
+          <!-- スライドする下線インジケータ（オレンジグロー付き） -->
+          <span
+            class="pointer-events-none absolute -bottom-px left-0 h-0.5 w-1/2 rounded-full bg-gradient-to-r from-orange-400 to-orange-600 shadow-[0_0_8px_rgba(249,115,22,0.5)] transition-transform duration-300 ease-out"
+            :style="{ transform: viewMode === 'list' ? 'translateX(100%)' : 'translateX(0)' }"
+          />
         </div>
+      </div>
+      <!-- 登録アクション（遷移先は別途配線予定） -->
+      <div class="flex items-center gap-2 flex-wrap">
         <button
-          v-if="viewMode === 'list' && hasPermission('sale:edit')"
           type="button"
-          class="px-3 py-1.5 text-sm border border-purple-300 bg-purple-50 hover:bg-purple-100 text-purple-800 rounded-sm inline-flex items-center gap-1"
-          @click="saleMode = !saleMode"
+          class="px-3 py-1.5 text-sm bg-orange-500 hover:bg-orange-600 text-white rounded-sm inline-flex items-center gap-1.5 font-semibold shadow-sm"
         >
-          <UIcon name="i-lucide-shopping-cart" class="size-4" />
-          {{ saleMode ? '物販販売フォームを閉じる' : '物販販売を追加' }}
+          <UIcon name="i-lucide-calendar-plus" class="size-4" />
+          予約を登録する
         </button>
-        <NuxtLink
-          to="/dashboard/reservations/new"
-          class="px-3 py-1.5 text-sm bg-orange-500 hover:bg-orange-600 text-white rounded-sm inline-flex items-center gap-1"
+        <button
+          type="button"
+          class="px-3 py-1.5 text-sm bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 rounded-sm inline-flex items-center gap-1.5 font-semibold"
         >
-          <UIcon name="i-lucide-plus" class="size-4" />
-          手動で予約を追加
-        </NuxtLink>
+          <UIcon name="i-lucide-clock-plus" class="size-4" />
+          予定を登録する
+        </button>
       </div>
     </div>
-    <p class="text-sm text-slate-600 mb-4">
-      予約と物販販売を一括管理。物販だけ買いに来たお客様もここから登録できます。
-    </p>
 
     <!-- ========== スケジュールビュー ========== -->
     <template v-if="viewMode === 'schedule'">
-      <!-- 店舗選択 + 日付ナビ -->
-      <div class="bg-white border border-[#c3c4c7] rounded-sm p-3 mb-4 flex flex-wrap items-center gap-3">
-        <div>
-          <label class="block text-xs font-semibold text-slate-700 mb-1">店舗</label>
-          <select
-            :value="storeIdFilter ?? ''"
-            class="px-2 py-1.5 text-sm border border-[#8c8f94] rounded-sm bg-white focus:outline-none focus:border-orange-500"
-            @change="storeIdFilter = Number(($event.target as HTMLSelectElement).value) || null"
-          >
-            <option value="">
-              店舗を選んでください
-            </option>
-            <option v-for="s in (stores ?? [])" :key="s.id" :value="s.id">
-              {{ s.name }}
-            </option>
-          </select>
-        </div>
-        <div v-if="storeIdFilter" class="flex items-end gap-2">
-          <div>
-            <label class="block text-xs font-semibold text-slate-700 mb-1">対象日</label>
-            <input
-              v-model="scheduleDate"
-              type="date"
-              class="px-2 py-1.5 text-sm border border-[#8c8f94] rounded-sm focus:outline-none focus:border-orange-500"
-            >
-          </div>
-          <div class="inline-flex border border-[#8c8f94] rounded-sm overflow-hidden text-sm">
-            <button
-              type="button"
-              class="px-2.5 py-1.5 bg-white text-slate-700 hover:bg-[#f6f7f7]"
-              title="前日"
-              @click="shiftDate(-1)"
-            >
-              <UIcon name="i-lucide-chevron-left" class="size-4" />
-            </button>
-            <button
-              type="button"
-              class="px-3 py-1.5 border-l border-[#8c8f94] bg-white text-slate-700 hover:bg-[#f6f7f7]"
-              @click="goToday"
-            >
-              今日
-            </button>
-            <button
-              type="button"
-              class="px-2.5 py-1.5 border-l border-[#8c8f94] bg-white text-slate-700 hover:bg-[#f6f7f7]"
-              title="翌日"
-              @click="shiftDate(1)"
-            >
-              <UIcon name="i-lucide-chevron-right" class="size-4" />
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- 店舗未選択時 -->
+      <!-- 店舗未選択時（OWNER で「管理者(全店)」を選んでいるとき）。
+           ヘッダーの店舗スイッチャーから 1 店舗を選ぶよう促す。 -->
       <div
-        v-if="!storeIdFilter"
+        v-if="!selectedStoreId"
         class="bg-white border border-dashed border-[#c3c4c7] rounded-sm p-10 text-center"
       >
         <UIcon name="i-lucide-building-2" class="size-8 text-slate-400 mx-auto mb-2" />
         <p class="text-sm text-slate-600">
-          スケジュールを表示するには店舗を選択してください
+          スケジュールを表示するには上部のスイッチャーから店舗を選択してください
         </p>
         <p class="text-xs text-slate-500 mt-1">
           複数店舗のベッドを 1 画面に混ぜると把握しづらいため、1 店舗ずつ表示します。
         </p>
       </div>
 
-      <!-- スケジュール本体 -->
-      <!-- Nuxt の自動コンポーネント名: Admin/Reservations/ReservationsTimeline.vue は
-           ファイル名がディレクトリ名で始まるため AdminReservationsTimeline に短縮される -->
-      <AdminReservationsTimeline
+      <!-- スケジュール本体（横軸=時刻、スタッフ + ベッドの 2 段構成）
+           日付ナビは HorizontalSchedule 内のツールバーが持つので v-model:date で双方向同期 -->
+      <AdminReservationsHorizontalSchedule
         v-else
-        :store-id="storeIdFilter"
-        :date="scheduleDate"
+        :store-id="selectedStoreId"
+        v-model:date="scheduleDate"
       />
     </template>
 

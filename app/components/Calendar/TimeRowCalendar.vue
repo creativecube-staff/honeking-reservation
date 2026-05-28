@@ -20,6 +20,16 @@ const props = withDefaults(
     rowHeight?: number
     headerPx?: number
     barCursor?: string
+    /**
+     * 営業時間外 / 中抜け休憩などの「使えない時間帯」を全行共通で背景に描画する。
+     * 予約バー（ranges）の下に表示される。
+     */
+    nonBusinessRanges?: { startTime: string, endTime: string, label?: string }[]
+    /**
+     * 「今」を表す縦線を描く HH:MM 文字列。undefined / null / 表示窓外なら非表示。
+     * 全行を貫く赤いラインとして描画され、対象日が今日のときに渡す想定。
+     */
+    nowMarker?: string | null
   }>(),
   {
     hourStart: 7,
@@ -34,6 +44,8 @@ const props = withDefaults(
     rowHeight: 64,
     headerPx: 26,
     barCursor: 'move',
+    nonBusinessRanges: () => [],
+    nowMarker: null,
   },
 )
 
@@ -63,10 +75,12 @@ const totalMin = computed(() => (props.hourEnd - props.hourStart) * 60)
 // スクロール下限となる最小トラック幅（通常は親幅いっぱいに伸縮するので、これより広くなる）
 const minTrackW = computed(() => (props.hourEnd - props.hourStart) * props.hourPx)
 
-// 目盛り（snapMin = 15 分ごと）。左端（hourStart）は行ラベルの右枠と二重になるので描かない。
+// 目盛り（snapMin = 15 分ごと）。
+// 左端（hourStart）は行ラベルの右枠と二重になるので描かない。
+// 右端（hourEnd）は親コンテナの外枠 border-right と二重になるので描かない（`<` で除外）。
 const TICKS = computed(() => {
   const out: { min: number, isHour: boolean }[] = []
-  for (let m = props.hourStart * 60 + props.snapMin; m <= props.hourEnd * 60; m += props.snapMin) {
+  for (let m = props.hourStart * 60 + props.snapMin; m < props.hourEnd * 60; m += props.snapMin) {
     out.push({ min: m, isHour: m % 60 === 0 })
   }
   return out
@@ -364,6 +378,7 @@ const HANDLE_PX = 8 // 左右端のリサイズハンドル領域
         v-for="col in columns"
         :key="col.id"
         class="flex border-t border-[#dcdcde]"
+        :class="col.rowClass"
       >
         <!-- 行ラベル（左） -->
         <div
@@ -392,6 +407,29 @@ const HANDLE_PX = 8 // 左右端のリサイズハンドル領域
             class="absolute top-0 bottom-0 border-l pointer-events-none"
             :class="t.isHour ? 'border-[#dcdcde]' : 'border-dashed border-[#f0f0f1]'"
             :style="{ left: `${minutesToPct(t.min)}%` }"
+          />
+
+          <!-- 営業時間外 / 中抜け休憩のオーバーレイ（予約バーの下に描画）
+               列固有 col.nonBusinessRanges が優先、なければ global nonBusinessRanges -->
+          <div
+            v-for="(nbr, i) in (col.nonBusinessRanges ?? nonBusinessRanges)"
+            :key="`nb-${col.id}-${i}`"
+            class="absolute top-0 bottom-0 pointer-events-none bg-[repeating-linear-gradient(45deg,_transparent,_transparent_5px,_#e5e7eb_5px,_#e5e7eb_10px)] flex items-center justify-center"
+            :style="{
+              left: `${minutesToPct(toMinutes(nbr.startTime))}%`,
+              width: `${minutesToPct(toMinutes(nbr.endTime)) - minutesToPct(toMinutes(nbr.startTime))}%`,
+            }"
+          >
+            <span v-if="nbr.label" class="text-[10px] font-semibold text-slate-500 whitespace-nowrap px-1 bg-white/70 rounded-sm">
+              {{ nbr.label }}
+            </span>
+          </div>
+
+          <!-- 「今」マーカー（赤い縦線・表示窓内のときだけ描く） -->
+          <div
+            v-if="nowMarker && toMinutes(nowMarker) >= hourStart * 60 && toMinutes(nowMarker) <= hourEnd * 60"
+            class="absolute top-0 bottom-0 w-px bg-red-500 pointer-events-none z-10"
+            :style="{ left: `${minutesToPct(toMinutes(nowMarker))}%` }"
           />
 
           <!-- 空表示 -->

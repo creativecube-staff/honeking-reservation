@@ -119,7 +119,14 @@ export async function purgeStore(storeId: number) {
     await tx.reservation.deleteMany({ where: { id: { in: reservationIds } } })
     // 6. シフト（この店舗のスタッフ + この店舗へのヘルプ勤務）
     await tx.shift.deleteMany({ where: { OR: [{ practitionerId: { in: practitionerIds } }, { workStoreId: storeId }] } })
-    // 7. 店舗特別メニュー
+    // 7. メニューに関する除外設定（FK Restrict 対応）。
+    //    - storeId 一致: この店舗を「非表示」にしている共通メニューの除外行
+    //    - menuId 一致: 次のステップで消す店舗特別メニューを参照する除外行（設計上は無いがガード）
+    const storeMenuIds = (await tx.menu.findMany({ where: { storeId }, select: { id: true } })).map(m => m.id)
+    await tx.menuStoreExclusion.deleteMany({
+      where: { OR: [{ storeId }, { menuId: { in: storeMenuIds } }] },
+    })
+    // 8. 店舗特別メニュー
     await tx.menu.deleteMany({ where: { storeId } })
     // 8. 営業時間
     await tx.businessHour.deleteMany({ where: { storeId } })

@@ -23,13 +23,27 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  const { availableFrom, availableUntil, ...rest } = parsed.data
+  // excludedStoreIds は共通メニュー専用なので店舗特別メニューでは無視
+  const { availableFrom, availableUntil, excludedStoreIds, replacesMenuId, ...rest } = parsed.data
+  void excludedStoreIds
+
+  // 差し替え対象が指定されている場合は、有効な共通メニューであることを確認
+  if (replacesMenuId != null) {
+    const target = await prisma.menu.findFirst({
+      where: { id: replacesMenuId, storeId: null },
+      select: { id: true, isActive: true },
+    })
+    if (!target) {
+      throw createError({ statusCode: 400, statusMessage: '差し替え対象には有効な共通メニューを指定してください' })
+    }
+  }
 
   try {
     return await prisma.menu.create({
       data: {
         ...rest,
         storeId,
+        replacesMenuId: replacesMenuId ?? null,
         availableFrom: availableFrom == null ? null : new Date(availableFrom),
         availableUntil: availableUntil == null ? null : new Date(availableUntil),
       },

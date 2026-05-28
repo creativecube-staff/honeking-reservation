@@ -24,13 +24,34 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, statusMessage: 'メニューが見つかりません' })
   }
 
-  const { availableFrom, availableUntil, ...rest } = parsed.data
+  // excludedStoreIds は共通メニュー専用なので店舗特別メニューでは無視
+  const { availableFrom, availableUntil, excludedStoreIds, replacesMenuId, ...rest } = parsed.data
+  void excludedStoreIds
+
+  // 差し替え対象が更新で指定されたら有効な共通メニューであることを確認（null へのクリアは許可）
+  if (replacesMenuId != null) {
+    if (replacesMenuId === menuId) {
+      throw createError({ statusCode: 400, statusMessage: '自分自身を差し替え対象にすることはできません' })
+    }
+    const target = await prisma.menu.findFirst({
+      where: { id: replacesMenuId, storeId: null },
+      select: { id: true },
+    })
+    if (!target) {
+      throw createError({ statusCode: 400, statusMessage: '差し替え対象には有効な共通メニューを指定してください' })
+    }
+  }
+
   const data: Prisma.MenuUpdateInput = { ...rest }
   if (availableFrom !== undefined) {
     data.availableFrom = availableFrom == null ? null : new Date(availableFrom)
   }
   if (availableUntil !== undefined) {
     data.availableUntil = availableUntil == null ? null : new Date(availableUntil)
+  }
+  // replacesMenuId は更新時に明示的に送られたときだけ反映（null クリアも許可、未送信なら触らない）
+  if (replacesMenuId !== undefined) {
+    data.replaces = replacesMenuId == null ? { disconnect: true } : { connect: { id: replacesMenuId } }
   }
 
   try {

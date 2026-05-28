@@ -13,6 +13,12 @@ const baseShape = {
   // 表示期間（任意。両方 null/未指定 = 期間制限なし）
   availableFrom: z.string().regex(dateRegex, '日付は YYYY-MM-DD 形式で指定してください').nullable().optional(),
   availableUntil: z.string().regex(dateRegex, '日付は YYYY-MM-DD 形式で指定してください').nullable().optional(),
+  // 共通メニュー（storeId IS NULL）専用: ここに含まれる店舗 ID では非表示にする（オプトアウト）。
+  // 店舗特別メニューの作成・編集で渡されても、サーバ側で無視する。
+  excludedStoreIds: z.array(z.number().int().positive()).max(50, '除外できる店舗は 50 件までです').default([]),
+  // 店舗特別メニュー専用: 期間中に差し替える共通メニューの ID（任意・null = 差し替えなし）。
+  // 共通メニューの作成・編集で渡されても、サーバ側で null に強制する。
+  replacesMenuId: z.number().int().positive().nullable().optional(),
 }
 
 const periodOrderRefine = (d: { availableFrom?: string | null, availableUntil?: string | null }) =>

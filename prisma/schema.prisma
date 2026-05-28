@@ -28,18 +28,20 @@ model Store {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  beds          Bed[]
-  practitioners Practitioner[]
-  menus         Menu[]
-  businessHours BusinessHour[]
-  holidays      Holiday[]
-  closures      Closure[]
-  reservations  Reservation[]
-  products      Product[]
-  productSales  ProductSale[]
+  beds           Bed[]
+  practitioners  Practitioner[]
+  menus          Menu[]
+  businessHours  BusinessHour[]
+  holidays       Holiday[]
+  closures       Closure[]
+  reservations   Reservation[]
+  products       Product[]
+  productSales   ProductSale[]
+  // 共通メニューのうち「この店舗では非表示にする」除外行（オプトアウト方式）
+  menuExclusions MenuStoreExclusion[]
   // ヘルプ勤務の back-relation: Shift.workStoreId が指す Shift 一覧。
   // メイン所属（Practitioner.storeId）とは別。null の Shift はメイン店舗で勤務する想定。
-  workShifts    Shift[]        @relation("ShiftWorkStore")
+  workShifts     Shift[]              @relation("ShiftWorkStore")
 }
 
 // ベッド（店舗ごとに3〜4台）
@@ -137,15 +139,39 @@ model Menu {
   // 例: オープン記念キャンペーンメニュー
   availableFrom   DateTime? @db.Date
   availableUntil  DateTime? @db.Date
+  // 店舗特別メニュー（storeId IS NOT NULL）専用: 期間中に「差し替える」共通メニュー（任意）。
+  // アクティブな期間中、お客様側でその共通メニューはこの店舗で自動的に非表示になる。
+  // 期間（availableUntil）を過ぎたら自動で共通メニューに戻る。共通メニュー側ではこのフィールドは常に null。
+  replacesMenuId  Int?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  store        Store?        @relation(fields: [storeId], references: [id], onDelete: Restrict)
-  reservations Reservation[]
+  store          Store?               @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  reservations   Reservation[]
+  // 共通メニュー（storeId IS NULL）を「この店舗では表示しない」と除外する関連
+  excludedStores MenuStoreExclusion[]
+  // 差し替え対象の共通メニュー（自分が店舗特別メニューのとき）
+  replaces       Menu?                @relation("MenuReplacement", fields: [replacesMenuId], references: [id], onDelete: Restrict)
+  // 自分（共通メニュー）を差し替えている店舗特別メニュー群
+  replacedBy     Menu[]               @relation("MenuReplacement")
 
   // (storeId, name) は店舗特別メニューの一意性を保証する。
   // 共通メニュー（storeId IS NULL）の name 重複防止は migration の部分 unique index で対応。
   @@unique([storeId, name])
+  @@index([storeId])
+}
+
+// 共通メニュー（storeId IS NULL）を「この店舗では表示しない」と除外するための関連テーブル。
+// 共通メニュー専用（店舗特別メニューは自店だけに出るので除外の概念は不要）。
+// デフォルトは「全店舗で表示」のまま、例外（非表示）だけここに行を入れる。
+model MenuStoreExclusion {
+  menuId  Int
+  storeId Int
+
+  menu  Menu  @relation(fields: [menuId], references: [id], onDelete: Restrict)
+  store Store @relation(fields: [storeId], references: [id], onDelete: Restrict)
+
+  @@id([menuId, storeId])
   @@index([storeId])
 }
 

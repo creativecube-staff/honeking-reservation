@@ -82,6 +82,34 @@ export default defineEventHandler(async (event) => {
   if (menu.storeId !== null && menu.storeId !== store.id) {
     throw createError({ statusCode: 400, statusMessage: 'このメニューは指定店舗で利用できません' })
   }
+  // 共通メニューでも「この店舗では非表示」と除外されていれば予約不可
+  if (menu.storeId === null) {
+    const excluded = await prisma.menuStoreExclusion.findUnique({
+      where: { menuId_storeId: { menuId: menu.id, storeId: store.id } },
+      select: { menuId: true },
+    })
+    if (excluded) {
+      throw createError({ statusCode: 400, statusMessage: 'このメニューは指定店舗で利用できません' })
+    }
+  }
+
+  // 共通メニューが「対象日に差し替えアクティブな店舗特別メニュー」を持つ日は per-day で除外する。
+  // 期間終了で自動的に元の共通メニューに戻る挙動はこの判定で実現される。
+  // 店舗特別メニューには差し替えの概念がないので、共通メニューのときだけ調べる。
+  const menuReplacements = menu.storeId === null
+    ? await prisma.menu.findMany({
+        where: { storeId: store.id, isActive: true, replacesMenuId: menu.id },
+        select: { availableFrom: true, availableUntil: true },
+      })
+    : []
+  function isReplacedOnDate(d: Date): boolean {
+    for (const r of menuReplacements) {
+      if (r.availableFrom && d < r.availableFrom) continue
+      if (r.availableUntil && d > r.availableUntil) continue
+      return true
+    }
+    return false
+  }
 
   // 期間内の関連データをまとめて取得
   const [businessHours, holidays, closures, publicHolidays, beds, practitioners, shifts, reservations] = await Promise.all([
@@ -202,8 +230,10 @@ export default defineEventHandler(async (event) => {
     )
     // 今日より過去は不可
     const isPast = d < today
+    // この日に「差し替えアクティブな店舗特別メニュー」があれば、この共通メニューは予約不可
+    const isReplaced = isReplacedOnDate(d)
 
-    if (isHoliday || isPast || !isWithinMenuPeriod) {
+    if (isHoliday || isPast || !isWithinMenuPeriod || isReplaced) {
       result.push({
         date: ymd,
         isClosed: isHoliday,

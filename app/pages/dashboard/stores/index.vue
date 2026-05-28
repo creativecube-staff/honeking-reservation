@@ -5,9 +5,10 @@ import type { Store } from '@prisma/client'
 definePageMeta({ layout: 'admin' })
 
 // 店舗スイッチャーのコンテキスト。
-// 管理者(全店)モード = 店舗一覧 + 新規登録 / 店舗モード = 自店の店休日のみ。
+// 全店（管理者）= 店舗一覧 + 新規登録 / 店舗選択中 = その店舗の店休日。
+// 分岐は selectedStoreId を主軸にし、store-context（canAccessAll）解決前は「読み込み中」を出して
+// 「中身が空」の状態を作らない。
 const { selectedStoreId, canAccessAll, selectedStoreName } = useStoreContext()
-const isAdminView = computed(() => canAccessAll.value && selectedStoreId.value === null)
 
 type Status = 'all' | 'active' | 'inactive'
 const status = ref<Status>('all')
@@ -227,8 +228,8 @@ const dateFmt = new Intl.DateTimeFormat('ja-JP', {
 
 <template>
   <div>
-    <!-- 店舗モード: 自店の店休日のみ（基本情報・ベッド・営業時間は管理者モード専用） -->
-    <div v-if="!isAdminView">
+    <!-- 店舗選択中: 自店の店休日のみ（基本情報・ベッド・営業時間は管理者モード専用） -->
+    <div v-if="selectedStoreId != null">
       <h1 class="text-2xl font-semibold text-slate-900 mb-1">
         店休日
       </h1>
@@ -238,8 +239,8 @@ const dateFmt = new Intl.DateTimeFormat('ja-JP', {
       <AdminScheduleHolidaysPanel v-if="selectedStoreId" :store-id="selectedStoreId" />
     </div>
 
-    <!-- 管理者(全店)モード: 店舗一覧 -->
-    <template v-else>
+    <!-- 全店（管理者）: 店舗一覧 -->
+    <template v-else-if="canAccessAll">
     <AdminDetailHeader title="店舗管理" description="店舗の追加・編集・無効化を行います。">
       <!-- 新規追加はタイトルの隣（バッジ位置）に置く -->
       <NuxtLink
@@ -308,17 +309,21 @@ const dateFmt = new Intl.DateTimeFormat('ja-JP', {
             <th class="px-3 py-2.5 text-left font-semibold border-b border-[#c3c4c7]">
               <button type="button" class="inline-flex items-center gap-1 hover:text-orange-700" @click="toggleSort('prefecture')">
                 都道府県
-                <span class="text-[10px]" :class="sortKey === 'prefecture' ? 'text-orange-600' : 'text-slate-300'">
-                  {{ sortKey === 'prefecture' ? (sortDir === 'asc' ? '▲' : '▼') : '↕' }}
-                </span>
+                <UIcon
+                  :name="sortKey === 'prefecture' ? (sortDir === 'asc' ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down') : 'i-lucide-chevrons-up-down'"
+                  class="size-3.5"
+                  :class="sortKey === 'prefecture' ? 'text-orange-600' : 'text-slate-400'"
+                />
               </button>
             </th>
             <th class="px-3 py-2.5 text-left font-semibold border-b border-[#c3c4c7]">
               <button type="button" class="inline-flex items-center gap-1 hover:text-orange-700" @click="toggleSort('city')">
                 市区町村
-                <span class="text-[10px]" :class="sortKey === 'city' ? 'text-orange-600' : 'text-slate-300'">
-                  {{ sortKey === 'city' ? (sortDir === 'asc' ? '▲' : '▼') : '↕' }}
-                </span>
+                <UIcon
+                  :name="sortKey === 'city' ? (sortDir === 'asc' ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down') : 'i-lucide-chevrons-up-down'"
+                  class="size-3.5"
+                  :class="sortKey === 'city' ? 'text-orange-600' : 'text-slate-400'"
+                />
               </button>
             </th>
             <th class="px-3 py-2.5 text-left font-semibold border-b border-[#c3c4c7]">
@@ -330,9 +335,11 @@ const dateFmt = new Intl.DateTimeFormat('ja-JP', {
             <th class="px-3 py-2.5 text-right font-semibold border-b border-[#c3c4c7]">
               <button type="button" class="inline-flex items-center gap-1 hover:text-orange-700" @click="toggleSort('displayOrder')">
                 表示順
-                <span class="text-[10px]" :class="sortKey === 'displayOrder' ? 'text-orange-600' : 'text-slate-300'">
-                  {{ sortKey === 'displayOrder' ? (sortDir === 'asc' ? '▲' : '▼') : '↕' }}
-                </span>
+                <UIcon
+                  :name="sortKey === 'displayOrder' ? (sortDir === 'asc' ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down') : 'i-lucide-chevrons-up-down'"
+                  class="size-3.5"
+                  :class="sortKey === 'displayOrder' ? 'text-orange-600' : 'text-slate-400'"
+                />
               </button>
             </th>
             <th class="px-3 py-2.5 text-left font-semibold border-b border-[#c3c4c7]">
@@ -535,5 +542,10 @@ const dateFmt = new Intl.DateTimeFormat('ja-JP', {
       </div>
     </div>
     </template>
+
+    <!-- 店舗コンテキスト解決待ち（稀）。ここで空白を出さない -->
+    <div v-else class="py-12 text-center text-sm text-slate-500">
+      読み込み中…
+    </div>
   </div>
 </template>

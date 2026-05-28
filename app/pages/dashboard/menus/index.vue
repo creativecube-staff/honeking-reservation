@@ -1,33 +1,39 @@
 <script setup lang="ts">
 // メニュー管理ページ。一覧・検索・編集 UI は AdminMenuManager に集約済み。
-// 管理者(全店)モード = 共通メニュー / 店舗モード = 自店の店舗特別メニュー、を店舗スイッチャーの文脈で切り替える。
+// 店舗が選択されていれば店舗特別メニュー、全店（管理者）なら共通メニューを出す。
+// 分岐は selectedStoreId を主軸にする。store-context（canAccessAll）の解決前は「読み込み中」を出し、
+// 「ヘッダーだけ出て中身が空」になる状態を作らない。
 definePageMeta({ layout: 'admin' })
 
 const { selectedStoreId, canAccessAll, selectedStoreName } = useStoreContext()
-const isAdminView = computed(() => canAccessAll.value && selectedStoreId.value === null)
 </script>
 
 <template>
   <div>
-    <!-- 店舗モード: 自店の店舗特別メニュー -->
-    <div v-if="!isAdminView">
+    <!-- 店舗選択中 = その店舗の特別メニュー -->
+    <div v-if="selectedStoreId != null">
       <AdminDetailHeader title="店舗特別メニュー">
         <template #description>
-          {{ selectedStoreName }} だけのメニューを管理します。全店共通のメニューは管理者モードの「メニュー管理」で扱います。
+          店舗の特別メニューを管理します。全店共通のメニューは管理者にお問い合わせください。
         </template>
       </AdminDetailHeader>
-      <AdminMenuManager v-if="selectedStoreId" :store-id="selectedStoreId" />
+      <AdminMenuManager :store-id="selectedStoreId" />
     </div>
 
-    <!-- 管理者(全店)モード: 共通メニュー管理 -->
-    <template v-else>
+    <!-- 全店（管理者）= 共通メニュー -->
+    <div v-else-if="canAccessAll">
       <AdminDetailHeader title="メニュー管理">
         <template #description>
           共通メニュー（全店舗で自動的に利用可能）を管理します。<br>
-          店舗ごとの特別メニューは、ヘッダーの店舗スイッチャーで対象店舗に切り替えると管理できます。
+          店舗ごとの特別メニューは、対象店舗に切り替えてメニューで登録してください。
         </template>
       </AdminDetailHeader>
       <AdminMenuManager />
-    </template>
+    </div>
+
+    <!-- 店舗コンテキスト解決待ち（稀）。ここで空白を出さない -->
+    <div v-else class="py-12 text-center text-sm text-slate-500">
+      読み込み中…
+    </div>
   </div>
 </template>

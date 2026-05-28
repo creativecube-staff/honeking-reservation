@@ -2,6 +2,13 @@
 import type { Menu } from '@prisma/client'
 import { menuBaseSchema, type MenuFormState } from '~~/shared/schemas/menu'
 
+// 共通メニューの一覧 GET は excludedStoreIds: number[] を含めて返す（編集モーダルのチェックボックス初期値用）。
+// 店舗特別メニューの GET は replacesMenu: { id, name } | null を含めて返す（テーブルの「差し替え対象」列用）。
+type MenuRow = Menu & {
+  excludedStoreIds?: number[]
+  replacesMenu?: { id: number, name: string } | null
+}
+
 // 共通メニュー / 店舗特別メニューの管理を 1 コンポーネントに集約。
 // storeId なし = 共通メニュー（/api/admin/menus）/ storeId あり = その店舗の特別メニュー（/api/admin/stores/{id}/menus）。
 // 一覧・あいまい検索・ステータスタブ・編集モーダル・CRUD を全部内包する。差は API パスと文言だけ。
@@ -18,15 +25,38 @@ const apiBase = computed(() =>
   isStore.value ? `/api/admin/stores/${props.storeId}/menus` : '/api/admin/menus',
 )
 
-const { data: menus, refresh, error } = await useFetch<Menu[]>(
+const { data: menus, refresh, error } = await useFetch<MenuRow[]>(
   apiBase,
   {
     // 共通メニュー GET は ?status=all を取る。店舗メニュー GET は全件返すのでクエリ不要。
     query: isStore.value ? undefined : { status: 'all' },
     watch: false,
-    default: () => [] as Menu[],
+    default: () => [] as MenuRow[],
   },
 )
+
+// 共通メニューの「店舗別非表示」チェックボックス用に、アクセス可能な店舗一覧を取得。
+// store-context は管理画面ヘッダー側でロード済みなのでキャッシュが効く。
+const { stores: allStores } = useStoreContext()
+
+// 店舗特別メニューを編集するときの「共通メニューと差し替え」ドロップダウン用に、有効な共通メニュー一覧を取得。
+// 店舗特別モードのときだけ叩く（共通モードでは不要）。
+const { data: commonMenusForDropdown } = await useFetch<MenuRow[]>(
+  '/api/admin/menus',
+  {
+    query: { status: 'active' },
+    watch: false,
+    default: () => [] as MenuRow[],
+    immediate: isStore.value,
+  },
+)
+
+// テーブル列「非表示店舗」用: 共通メニューの excludedStoreIds を店舗名カンマ区切りに解決
+function excludedStoreNames(m: MenuRow): string {
+  if (!m.excludedStoreIds || m.excludedStoreIds.length === 0) return ''
+  const ids = new Set(m.excludedStoreIds)
+  return allStores.value.filter(s => ids.has(s.id)).map(s => s.name).join('、')
+}
 
 // ── ステータスタブ + あいまい検索 ───────────────────────
 type Status = 'all' | 'active' | 'inactive'
@@ -93,6 +123,8 @@ const state = reactive<MenuFormState>({
   isActive: true,
   availableFrom: '',
   availableUntil: '',
+  excludedStoreIds: [], // 共通メニューだけ使う。店舗特別メニューでは送っても無視される
+  replacesMenuId: null, // 店舗特別メニューだけ使う（共通メニューを期間中差し替える対象）
 })
 const fieldErrors = ref<Record<string, string>>({})
 const formError = ref<string | null>(null)
@@ -107,6 +139,8 @@ function resetForm() {
   state.isActive = true
   state.availableFrom = ''
   state.availableUntil = ''
+  state.excludedStoreIds = []
+  state.replacesMenuId = null
   fieldErrors.value = {}
   formError.value = null
 }
@@ -120,7 +154,7 @@ function openCreate() {
   editorOpen.value = true
 }
 
-function openEdit(menu: Menu) {
+function openEdit(menu: MenuRow) {
   editorMode.value = 'edit'
   editingId.value = menu.id
   state.name = menu.name
@@ -131,6 +165,10 @@ function openEdit(menu: Menu) {
   state.isActive = menu.isActive
   state.availableFrom = toIsoDate(menu.availableFrom)
   state.availableUntil = toIsoDate(menu.availableUntil)
+  // 共通メニューでは API が含めて返す。店舗特別メニューでは undefined → []
+  state.excludedStoreIds = menu.excludedStoreIds ?? []
+  // 店舗特別メニューでは差し替え対象 ID。共通メニューでは常に null
+  state.replacesMenuId = menu.replacesMenuId ?? null
   fieldErrors.value = {}
   formError.value = null
   editorOpen.value = true
@@ -206,6 +244,86 @@ async function onActivate(menu: Menu) {
   }
 }
 
+// ── 完全削除（物理削除）モーダル ───────────────────────
+// 店舗管理と同じパターン。無効化済みのメニューだけ実行可能で、メニュー名の完全一致タイプで誤爆防止。
+// 参照する予約があれば API 側で 409 拒否される（履歴保護）。
+interface PurgePreview {
+  menu: { id: number, name: string, isActive: boolean, storeId: number | null }
+  counts: { reservations: number }
+  canPurge: boolean
+  reasons: string[]
+}
+
+const purgeTarget = ref<Menu | null>(null)
+const purgePreview = ref<PurgePreview | null>(null)
+const purgeConfirmName = ref('')
+const purgeLoading = ref(false) // プレビュー取得中
+const purgeBusy = ref(false) // 削除実行中
+const purgeError = ref('')
+
+function errMessage(e: unknown, fallback: string): string {
+  if (e && typeof e === 'object') {
+    const err = e as { statusMessage?: string, message?: string, data?: { statusMessage?: string, message?: string } }
+    return err.data?.statusMessage ?? err.statusMessage ?? err.data?.message ?? err.message ?? fallback
+  }
+  return fallback
+}
+
+async function openPurge(menu: Menu) {
+  purgeTarget.value = menu
+  purgePreview.value = null
+  purgeConfirmName.value = ''
+  purgeError.value = ''
+  purgeLoading.value = true
+  try {
+    purgePreview.value = await $fetch<PurgePreview>(`${apiBase.value}/${menu.id}/purge-preview`)
+  }
+  catch (e) {
+    purgeError.value = errMessage(e, '影響範囲の取得に失敗しました')
+  }
+  finally {
+    purgeLoading.value = false
+  }
+}
+
+function closePurge() {
+  if (purgeBusy.value) return // 削除中は閉じさせない
+  purgeTarget.value = null
+  purgePreview.value = null
+  purgeConfirmName.value = ''
+  purgeError.value = ''
+}
+
+// メニュー名の完全一致 + 削除可能 + 実行中でない、を満たすときだけ実行ボタンを有効化
+const canSubmitPurge = computed(() =>
+  !!purgePreview.value
+  && purgePreview.value.canPurge
+  && purgeConfirmName.value === purgeTarget.value?.name
+  && !purgeBusy.value,
+)
+
+async function confirmPurge() {
+  if (!purgeTarget.value || !canSubmitPurge.value) return
+  purgeBusy.value = true
+  purgeError.value = ''
+  try {
+    await $fetch(`${apiBase.value}/${purgeTarget.value.id}/purge`, {
+      method: 'DELETE',
+      body: { confirmName: purgeConfirmName.value },
+    })
+    purgeTarget.value = null
+    purgePreview.value = null
+    purgeConfirmName.value = ''
+    await refresh()
+  }
+  catch (e) {
+    purgeError.value = errMessage(e, '削除に失敗しました')
+  }
+  finally {
+    purgeBusy.value = false
+  }
+}
+
 const baseInput = 'w-full px-2.5 py-2 text-sm border border-[#8c8f94] rounded-sm bg-white shadow-[inset_0_1px_2px_rgba(0,0,0,0.07)] focus:outline-none focus:border-orange-500 focus:shadow-[0_0_0_1px_#f97316]'
 const errInput = 'border-red-600 focus:border-red-600 focus:shadow-[0_0_0_1px_#dc2626]'
 </script>
@@ -269,32 +387,39 @@ const errInput = 'border-red-600 focus:border-red-600 focus:shadow-[0_0_0_1px_#d
       >
         <thead class="admin-table-head bg-[#f6f7f7] text-slate-900">
           <tr class="admin-table-head-row">
-            <th class="px-3 py-2.5 text-left font-semibold border-b border-[#c3c4c7]">
+            <th class="px-3 py-2.5 text-left font-semibold border-b border-[#c3c4c7] whitespace-nowrap w-56">
               メニュー名
             </th>
-            <th class="px-3 py-2.5 text-right font-semibold border-b border-[#c3c4c7]">
+            <th class="px-3 py-2.5 text-right font-semibold border-b border-[#c3c4c7] whitespace-nowrap">
               所要時間
             </th>
-            <th class="px-3 py-2.5 text-right font-semibold border-b border-[#c3c4c7]">
+            <th class="px-3 py-2.5 text-right font-semibold border-b border-[#c3c4c7] whitespace-nowrap">
               価格
             </th>
-            <th class="px-3 py-2.5 text-right font-semibold border-b border-[#c3c4c7]">
+            <th class="px-3 py-2.5 text-right font-semibold border-b border-[#c3c4c7] whitespace-nowrap">
               表示順
             </th>
-            <th class="px-3 py-2.5 text-left font-semibold border-b border-[#c3c4c7]">
+            <th class="px-3 py-2.5 text-left font-semibold border-b border-[#c3c4c7] whitespace-nowrap">
               表示期間
             </th>
-            <th class="px-3 py-2.5 text-left font-semibold border-b border-[#c3c4c7]">
+            <!-- 共通メニュー: 非表示にしている店舗 / 店舗特別メニュー: 差し替え対象の共通メニュー -->
+            <th v-if="!isStore" class="px-3 py-2.5 text-left font-semibold border-b border-[#c3c4c7] whitespace-nowrap">
+              非表示店舗
+            </th>
+            <th v-else class="px-3 py-2.5 text-left font-semibold border-b border-[#c3c4c7] whitespace-nowrap">
+              差し替え対象
+            </th>
+            <th class="px-3 py-2.5 text-left font-semibold border-b border-[#c3c4c7] whitespace-nowrap">
               状態
             </th>
-            <th class="px-3 py-2.5 text-left font-semibold border-b border-[#c3c4c7]">
+            <th class="px-3 py-2.5 text-left font-semibold border-b border-[#c3c4c7] whitespace-nowrap">
               作成日
             </th>
           </tr>
         </thead>
         <tbody class="admin-table-body">
           <tr v-if="filtered.length === 0" class="admin-table-empty">
-            <td colspan="7" class="px-3 py-6 text-center text-slate-500">
+            <td colspan="8" class="px-3 py-6 text-center text-slate-500">
               {{ keyword.trim()
                 ? '検索条件に一致するメニューはありません。'
                 : `${entityLabel}がありません。「＋ ${entityLabel}を追加」から登録してください。` }}
@@ -344,6 +469,17 @@ const errInput = 'border-red-600 focus:border-red-600 focus:shadow-[0_0_0_1px_#d
                 >
                   有効化
                 </button>
+                <!-- 完全削除（物理削除）は無効化済みのメニューのみ -->
+                <template v-if="!m.isActive">
+                  <span class="text-slate-300 mx-1.5">|</span>
+                  <button
+                    type="button"
+                    class="text-red-700 hover:text-red-900 hover:underline"
+                    @click="openPurge(m)"
+                  >
+                    完全削除
+                  </button>
+                </template>
               </div>
             </td>
             <td class="px-3 py-2.5 align-top text-right tabular-nums">
@@ -357,12 +493,27 @@ const errInput = 'border-red-600 focus:border-red-600 focus:shadow-[0_0_0_1px_#d
             </td>
             <td class="px-3 py-2.5 align-top text-xs tabular-nums">
               <span
-                v-if="formatPeriod(m.availableFrom, m.availableUntil)"
-                class="inline-flex items-center text-purple-800 bg-purple-50 border border-purple-200 px-1.5 py-0.5 rounded-sm"
+                v-if="m.availableFrom || m.availableUntil"
+                class="inline-flex flex-col items-start text-purple-800 bg-purple-50 border border-purple-200 px-1.5 py-0.5 rounded-sm leading-tight whitespace-nowrap"
               >
-                {{ formatPeriod(m.availableFrom, m.availableUntil) }}
+                <span>{{ m.availableFrom ? periodFmt.format(new Date(m.availableFrom)) : '常時' }}</span>
+                <span>〜 {{ m.availableUntil ? periodFmt.format(new Date(m.availableUntil)) : '常時' }}</span>
               </span>
               <span v-else class="text-slate-400">常時</span>
+            </td>
+            <!-- 共通メニュー: 非表示にしている店舗 / 店舗特別メニュー: 差し替え対象の共通メニュー -->
+            <td v-if="!isStore" class="px-3 py-2.5 align-top text-xs text-slate-700">
+              <span v-if="excludedStoreNames(m)">{{ excludedStoreNames(m) }}</span>
+              <span v-else class="text-slate-400">—</span>
+            </td>
+            <td v-else class="px-3 py-2.5 align-top text-xs">
+              <span
+                v-if="m.replacesMenu"
+                class="inline-flex items-center text-purple-800 bg-purple-50 border border-purple-200 px-1.5 py-0.5 rounded-sm"
+              >
+                {{ m.replacesMenu.name }}
+              </span>
+              <span v-else class="text-slate-400">—</span>
             </td>
             <td class="px-3 py-2.5 align-top">
               <span
@@ -500,6 +651,34 @@ const errInput = 'border-red-600 focus:border-red-600 focus:shadow-[0_0_0_1px_#d
               </div>
             </div>
 
+            <!-- 共通メニュー専用: 店舗別の非表示設定（チェックした店舗ではお客様側で出さない） -->
+            <div v-if="!isStore" class="border-t border-[#dcdcde] pt-3">
+              <label class="block text-sm font-semibold text-slate-900 mb-1">
+                以下の店舗では表示しない
+              </label>
+              <p class="text-xs text-slate-600 mb-2">
+                チェックした店舗ではこの共通メニューを非表示にします。デフォルトは全店表示。
+              </p>
+              <div class="space-y-1.5">
+                <label
+                  v-for="s in allStores"
+                  :key="s.id"
+                  class="flex items-center gap-2 text-sm select-none"
+                >
+                  <input
+                    v-model="state.excludedStoreIds"
+                    type="checkbox"
+                    :value="s.id"
+                    class="h-4 w-4 border-[#8c8f94] rounded-sm text-orange-500 focus:ring-orange-500"
+                  >
+                  {{ s.name }}
+                </label>
+                <p v-if="allStores.length === 0" class="text-xs text-slate-500">
+                  店舗がありません。
+                </p>
+              </div>
+            </div>
+
             <!-- 表示期間（任意） -->
             <div class="border-t border-[#dcdcde] pt-3">
               <label class="block text-sm font-semibold text-slate-900 mb-1">
@@ -539,6 +718,31 @@ const errInput = 'border-red-600 focus:border-red-600 focus:shadow-[0_0_0_1px_#d
               </div>
             </div>
 
+            <!-- 店舗特別メニュー専用: 共通メニューと差し替え（任意） -->
+            <div v-if="isStore" class="border-t border-[#dcdcde] pt-3">
+              <label class="block text-sm font-semibold text-slate-900 mb-1">
+                共通メニューと差し替える（任意）
+              </label>
+              <p class="text-xs text-slate-600 mb-2">
+                この特別メニューが有効な期間中、選んだ共通メニューはこの店舗で自動的に非表示になります。
+                表示期間の終了日を過ぎたら、自動で共通メニューに戻ります。
+              </p>
+              <select
+                v-model="state.replacesMenuId"
+                class="w-full px-2.5 py-2 text-sm border border-[#8c8f94] rounded-sm bg-white focus:outline-none focus:border-orange-500"
+              >
+                <option :value="null">
+                  差し替えなし
+                </option>
+                <option v-for="cm in commonMenusForDropdown" :key="cm.id" :value="cm.id">
+                  {{ cm.name }}（{{ cm.durationMinutes }} 分 / ¥{{ priceFmt.format(cm.priceJpy) }}）
+                </option>
+              </select>
+              <p v-if="commonMenusForDropdown.length === 0" class="mt-1 text-xs text-slate-500">
+                有効な共通メニューがありません。
+              </p>
+            </div>
+
             <div class="flex items-center gap-2 pt-2 border-t border-[#dcdcde]">
               <button
                 type="submit"
@@ -560,5 +764,87 @@ const errInput = 'border-red-600 focus:border-red-600 focus:shadow-[0_0_0_1px_#d
         </div>
       </template>
     </UModal>
+
+    <!-- 完全削除（物理削除）確認モーダル。店舗管理と同じスタイル -->
+    <div
+      v-if="purgeTarget"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      @click.self="closePurge"
+    >
+      <div class="bg-white rounded-md shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+        <div class="px-5 py-4 border-b border-slate-200">
+          <h2 class="text-lg font-semibold text-red-700">
+            {{ entityLabel }}を完全削除
+          </h2>
+          <p class="text-sm text-slate-600 mt-0.5">
+            「{{ purgeTarget.name }}」を物理削除します。<span class="font-semibold text-red-700">この操作は元に戻せません。</span>
+          </p>
+        </div>
+
+        <div class="px-5 py-4 space-y-4">
+          <p v-if="purgeLoading" class="text-sm text-slate-500">
+            影響範囲を確認中...
+          </p>
+
+          <template v-else-if="purgePreview">
+            <!-- 削除できない理由 -->
+            <div
+              v-if="!purgePreview.canPurge"
+              class="rounded-sm bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-amber-800"
+            >
+              <ul class="list-disc list-inside space-y-1">
+                <li v-for="(r, i) in purgePreview.reasons" :key="i">
+                  {{ r }}
+                </li>
+              </ul>
+            </div>
+
+            <!-- メニュー名タイプ確認（削除可能なときだけ） -->
+            <div v-if="purgePreview.canPurge">
+              <p class="text-xs text-slate-600 mb-2">
+                このメニューを参照する予約はありません。物理削除で影響するデータはありません。
+              </p>
+              <label class="block text-sm text-slate-700 mb-1">
+                確認のためメニュー名「<span class="font-semibold">{{ purgeTarget.name }}</span>」を入力してください
+              </label>
+              <input
+                v-model="purgeConfirmName"
+                type="text"
+                :placeholder="purgeTarget.name"
+                class="w-full border border-slate-300 rounded-sm px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-200 focus:border-red-400"
+                @keyup.enter="confirmPurge"
+              >
+            </div>
+          </template>
+
+          <!-- エラー -->
+          <div
+            v-if="purgeError"
+            class="rounded-sm bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700"
+          >
+            {{ purgeError }}
+          </div>
+        </div>
+
+        <div class="px-5 py-3 border-t border-slate-200 flex justify-end gap-2">
+          <button
+            type="button"
+            :disabled="purgeBusy"
+            class="px-3 py-1.5 text-sm border border-slate-300 rounded-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            @click="closePurge"
+          >
+            キャンセル
+          </button>
+          <button
+            type="button"
+            :disabled="!canSubmitPurge"
+            class="px-3 py-1.5 text-sm rounded-sm text-white bg-red-600 hover:bg-red-700 disabled:bg-slate-300 disabled:cursor-not-allowed"
+            @click="confirmPurge"
+          >
+            {{ purgeBusy ? '削除中...' : '完全に削除する' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>

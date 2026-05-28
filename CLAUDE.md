@@ -375,7 +375,10 @@ URL に状態を載せる方針(リロードに強く、シェア可能、戻る
 - `app/components/Admin/DetailHeader.vue` - 管理画面の共通ページ見出し(`<AdminDetailHeader>`)。左オレンジアクセントバー + 太字タイトル + バッジ(default slot)+ 右寄せ `#actions` + 下段(詳細ページ=戻るリンク `back-to`/`back-label` / 一覧ページ=説明文 `description` か `#description`)。詳細・一覧どちらのページでも使う。
 - `app/components/Admin/BackLink.vue` - 一覧へ戻るリンク(`<AdminBackLink>`)。矢印を丸背景に入れ hover でアクセント色、`accent` で orange/muted 切替。DetailHeader が内部利用。
 - `app/components/Admin/DetailActions.vue` - 詳細ページ下部の共通アクションバー(`<AdminDetailActions>`)。区切り線 + エラー表示 + 左=主操作(default slot)/ `#danger`=破壊的操作。`bordered` で上罫線の有無を切替(フォーム内に置くときは false)。
-- `app/components/Admin/Menu/Manager.vue` - 共通メニュー / 店舗特別メニュー管理を 1 コンポーネントに集約(`<AdminMenuManager>`)。`storeId` 無=共通(`/api/admin/menus`)/有=その店舗(`/api/admin/stores/{id}/menus`)。一覧・あいまい検索・ステータスタブ・編集モーダル・CRUD 全部入り。文言は storeId から自動で出し分け。
+- `app/components/Admin/Menu/Manager.vue` - 共通メニュー / 店舗特別メニュー管理を 1 コンポーネントに集約(`<AdminMenuManager>`)。`storeId` 無=共通(`/api/admin/menus`)/有=その店舗(`/api/admin/stores/{id}/menus`)。一覧・あいまい検索・ステータスタブ・編集モーダル・CRUD・完全削除モーダル・共通メニュー差し替えドロップダウン全部入り。文言は storeId から自動で出し分け。
+- `server/utils/menuPurge.ts` - 共通/店舗特別メニューの完全削除前提情報(`Reservation.menuId` 参照 0 件 + `isActive=false` のときのみ削除可)を共有。
+- `MenuStoreExclusion` テーブル - 共通メニューを「この店舗では非表示」とオプトアウトする関連。`Menu.excludedStores`(共通側)と `Store.menuExclusions`(店舗側)で参照。
+- `Menu.replacesMenuId` - 店舗特別メニュー専用の自己参照。アクティブな期間中(`isActive` かつ対象日が `availableFrom..availableUntil` 範囲内)はその共通メニューを当店で自動非表示、期間終了で自動復帰。お客様 API・availability で per-day 判定される。
 - `app/components/Admin/Store/BedsTab.vue` / `app/components/Admin/Schedule/BusinessHoursPanel.vue` - `storeId` 省略で「下書きモード」(API を叩かずローカル編集 → 親が `getBedNames()` / `getRanges()` で取り出す)。新規店舗作成ページ(`stores/new.vue`)が利用し、作成 API のトランザクションで Store + アカウント + ベッド + 営業時間を一括作成する。
 - `shared/businessHours.ts` - 全店共通の標準営業時間 `DEFAULT_BUSINESS_HOUR_RANGES`(新規店舗作成時の初期値)。
 - 管理画面テーブルの共通クラス: `admin-table` / `admin-table-wrap` / `admin-table-head` / `admin-table-body` / `admin-table-row`(縦罫線は点線)。一覧の絞り込みは「ステータスタブ + あいまい検索(名前等の部分一致・スペース区切りで AND)」、件数が多い列は見出しクリックでソート(店舗一覧の都道府県 / 市区町村 / 表示順)。

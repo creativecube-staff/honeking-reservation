@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client'
 import { updateMenuSchema } from '../../../../shared/schemas/menu'
 import { prisma } from '../../../utils/prisma'
 
+// 共通メニューの部分更新。本体フィールドと、excludedStoreIds の全置換をまとめる。
 export default defineEventHandler(async (event) => {
   const id = Number(getRouterParam(event, 'id'))
   if (!Number.isInteger(id) || id <= 0) {
@@ -24,7 +25,9 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, statusMessage: '共通メニューが見つかりません' })
   }
 
-  const { availableFrom, availableUntil, ...rest } = parsed.data
+  // 共通メニュー側では replacesMenuId は受け付けず常に null 扱い
+  const { availableFrom, availableUntil, excludedStoreIds, replacesMenuId, ...rest } = parsed.data
+  void replacesMenuId
   const data: Prisma.MenuUpdateInput = { ...rest }
   if (availableFrom !== undefined) {
     data.availableFrom = availableFrom == null ? null : new Date(availableFrom)
@@ -34,7 +37,20 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
-    return await prisma.menu.update({ where: { id }, data })
+    // 本体更新 + 除外店舗の全置換を 1 トランザクションでまとめる。
+    // excludedStoreIds が未送信(undefined)なら除外行は触らない。
+    return await prisma.$transaction(async (tx) => {
+      const updated = await tx.menu.update({ where: { id }, data })
+      if (excludedStoreIds !== undefined) {
+        await tx.menuStoreExclusion.deleteMany({ where: { menuId: id } })
+        if (excludedStoreIds.length > 0) {
+          await tx.menuStoreExclusion.createMany({
+            data: excludedStoreIds.map(storeId => ({ menuId: id, storeId })),
+          })
+        }
+      }
+      return updated
+    })
   }
   catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {

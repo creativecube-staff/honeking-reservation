@@ -3,9 +3,11 @@ import { z } from 'zod'
 const timeRegex = /^(?:[01]\d|2[0-3]):[0-5]\d$/
 
 // 1 つの営業時間レンジ（1 日に複数持てる）
+// dayOfWeek: -1=祝日（国民の祝日・全店共通）, 0=日, 1=月, …, 6=土
+// 祝日(-1) はオプション。-1 のレンジが無ければ祝日は日曜(0)にフォールバックする。
 export const businessHourRangeSchema = z
   .object({
-    dayOfWeek: z.number().int().min(0).max(6),
+    dayOfWeek: z.number().int().min(-1).max(6),
     startTime: z.string().regex(timeRegex, 'HH:MM 形式'),
     endTime: z.string().regex(timeRegex, 'HH:MM 形式'),
   })

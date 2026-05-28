@@ -23,19 +23,27 @@ const { data: apiRows, refresh, error } = await useFetch<ApiRow[]>(
 )
 
 // ── 曜日定義（縦カレンダーの列）─────────────────────
-const dowLabels = ['日', '月', '火', '水', '木', '金', '土']
-const dowHeaderColors = ['text-red-600', '', '', '', '', '', 'text-blue-600']
-// 日曜=薄い赤 / 土曜=薄い青の行背景
-const dowBgClass = ['bg-red-50', '', '', '', '', '', 'bg-blue-50']
-// 月曜はじまり・日曜を最後（土曜の下）に並べる
-const dowOrder = [1, 2, 3, 4, 5, 6, 0]
+// dayOfWeek の値: -1=祝日, 0=日, ..., 6=土
+// 配列ではなく Map で持ち、-1（祝日）も含めて統一的に扱う
+const dowMeta: Record<number, { label: string, headerClass: string, bgClass: string }> = {
+  [-1]: { label: '祝', headerClass: 'text-red-600', bgClass: 'bg-red-50' },
+  0: { label: '日', headerClass: 'text-red-600', bgClass: 'bg-red-50' },
+  1: { label: '月', headerClass: '', bgClass: '' },
+  2: { label: '火', headerClass: '', bgClass: '' },
+  3: { label: '水', headerClass: '', bgClass: '' },
+  4: { label: '木', headerClass: '', bgClass: '' },
+  5: { label: '金', headerClass: '', bgClass: '' },
+  6: { label: '土', headerClass: 'text-blue-600', bgClass: 'bg-blue-50' },
+}
+// 月曜はじまり → 土 → 日 → 祝（一番下）の並び
+const dowOrder = [1, 2, 3, 4, 5, 6, 0, -1]
 
 const columns = computed<CalendarColumn[]>(() =>
   dowOrder.map(dow => ({
     id: dow,
-    label: dowLabels[dow]!,
-    headerClass: dowHeaderColors[dow],
-    bgClass: dowBgClass[dow],
+    label: dowMeta[dow]!.label,
+    headerClass: dowMeta[dow]!.headerClass,
+    bgClass: dowMeta[dow]!.bgClass,
   })),
 )
 
@@ -86,10 +94,12 @@ const isDirty = computed(() => serialize(ranges.value) !== baseline.value)
 watch(isDirty, v => emit('update:dirty', v), { immediate: true })
 
 // ── 「他の曜日にコピー」 ────────────────────────────────
+// 平日（0〜6）から呼ばれる: 自分以外の平日 0〜6 に上書きコピー。祝日(-1)には影響させない。
 function applyDayToAll(columnId: string | number) {
   const dow = Number(columnId)
   const src = ranges.value.filter(r => r.columnId === dow)
-  const next = ranges.value.filter(r => r.columnId === dow) // 自分の曜日はそのまま
+  // 祝日(-1)の行はそのまま残し、平日のみ src で上書きする
+  const next = ranges.value.filter(r => r.columnId === -1 || r.columnId === dow)
   for (let other = 0; other < 7; other++) {
     if (other === dow) continue
     for (const r of src) {
@@ -100,6 +110,22 @@ function applyDayToAll(columnId: string | number) {
         endTime: r.endTime,
       })
     }
+  }
+  ranges.value = next
+}
+
+// 祝日(-1) 行から「日曜と同じ」「土曜と同じ」をワンクリックで反映するためのヘルパー
+function copyDayToHoliday(srcDow: number) {
+  const src = ranges.value.filter(r => r.columnId === srcDow)
+  // 祝日以外はそのまま、祝日(-1)だけ src のレンジで置き換え
+  const next = ranges.value.filter(r => r.columnId !== -1)
+  for (const r of src) {
+    next.push({
+      id: newId(),
+      columnId: -1,
+      startTime: r.startTime,
+      endTime: r.endTime,
+    })
   }
   ranges.value = next
 }
@@ -161,14 +187,39 @@ defineExpose({ save, reset, getRanges })
         empty-label="店休"
       >
         <template #row-label-actions="{ column }">
+          <!-- 平日（0〜6）: 自分の時間を他の平日へコピー（祝日には影響しない） -->
           <button
+            v-if="column.id !== -1"
             type="button"
             class="absolute bottom-0.5 left-1/2 -translate-x-1/2 text-[9px] text-blue-700 hover:text-blue-900 hover:underline opacity-0 group-hover:opacity-100 whitespace-nowrap"
-            title="この曜日を他の全曜日にコピー"
+            title="この曜日を他の全曜日にコピー（祝日は除く）"
             @click.stop="applyDayToAll(column.id)"
           >
             全曜日へ
           </button>
+          <!-- 祝日(-1): 「日曜と同じ」「土曜と同じ」プリセット -->
+          <div
+            v-else
+            class="absolute bottom-0.5 left-1/2 -translate-x-1/2 flex items-center gap-1 opacity-0 group-hover:opacity-100 whitespace-nowrap"
+          >
+            <button
+              type="button"
+              class="text-[9px] text-blue-700 hover:text-blue-900 hover:underline"
+              title="祝日の営業時間を日曜と同じにする"
+              @click.stop="copyDayToHoliday(0)"
+            >
+              日曜と同じ
+            </button>
+            <span class="text-slate-300 text-[9px]">|</span>
+            <button
+              type="button"
+              class="text-[9px] text-blue-700 hover:text-blue-900 hover:underline"
+              title="祝日の営業時間を土曜と同じにする"
+              @click.stop="copyDayToHoliday(6)"
+            >
+              土曜と同じ
+            </button>
+          </div>
         </template>
       </CalendarTimeRowCalendar>
     </div>

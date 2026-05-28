@@ -99,8 +99,13 @@ const SPECIAL_MENUS = {
 
 // 営業時間レンジ(両店共通)
 // 1 日に複数レンジを持てる。中抜け休憩は 2 つのレンジで表現。
-// 月-金: 9:30-12:30 + 15:00-20:30, 土日: 9:30-12:30 + 15:00-18:00
+// 月-金: 9:30-12:30 + 15:00-20:30, 土日祝: 9:30-12:30 + 15:00-18:00
+// dayOfWeek: -1=祝日, 0=日, 1=月, ..., 6=土
+// 祝日(-1) は PublicHoliday 該当日に引かれる。レンジが無い店舗は日曜(0)にフォールバック。
 const BUSINESS_HOUR_RANGES = [
+  // 祝(日曜と同じ短縮営業)
+  { dayOfWeek: -1, startTime: '09:30', endTime: '12:30' },
+  { dayOfWeek: -1, startTime: '15:00', endTime: '18:00' },
   // 日
   { dayOfWeek: 0, startTime: '09:30', endTime: '12:30' },
   { dayOfWeek: 0, startTime: '15:00', endTime: '18:00' },
@@ -191,7 +196,6 @@ async function main() {
   await prisma.reservation.deleteMany();
   await prisma.customer.deleteMany();
   await prisma.publicHoliday.deleteMany();
-  await prisma.closure.deleteMany();
   await prisma.holiday.deleteMany();
   await prisma.businessHour.deleteMany();
   await prisma.menu.deleteMany();

@@ -1,3 +1,4 @@
+import { DOW_PUBLIC_HOLIDAY, resolveBusinessHourDow } from '~~/shared/businessHours'
 import { prisma } from '../../../utils/prisma'
 
 // 指定日の各店舗の営業状況をまとめて返す。
@@ -5,7 +6,7 @@ import { prisma } from '../../../utils/prisma'
 //
 // 優先順位:
 //   1. Holiday に該当する日 → 店休 (営業しない)
-//   2. PublicHoliday に該当する日 → BusinessHour[dayOfWeek=0] (日曜扱い) を引く
+//   2. PublicHoliday に該当する日 → 祝日(-1) レンジを持つ店舗はそれを、無ければ日曜(0)にフォールバック
 //   3. それ以外 → BusinessHour[dayOfWeek=date.getDay()] を引く
 //
 // BusinessHour は 1 日に複数レンジを持てるので ranges として返す。
@@ -34,11 +35,15 @@ export default defineEventHandler(async (event) => {
   ])
 
   const isPublicHoliday = !!publicHoliday
-  const effectiveDow = isPublicHoliday ? 0 : dayOfWeek
   const holidayByStore = new Map(holidays.map(h => [h.storeId, h]))
 
   return stores.map((s) => {
     const holiday = holidayByStore.get(s.id) ?? null
+    // 店舗ごとに祝日(-1) レンジ有無を判定し、無ければ日曜にフォールバック
+    const hasHolidayRanges = businessHours.some(
+      b => b.storeId === s.id && b.dayOfWeek === DOW_PUBLIC_HOLIDAY,
+    )
+    const effectiveDow = resolveBusinessHourDow(isPublicHoliday, dayOfWeek, hasHolidayRanges)
     const ranges = businessHours
       .filter(b => b.storeId === s.id && b.dayOfWeek === effectiveDow)
       .map(b => ({ startTime: b.startTime, endTime: b.endTime }))
@@ -54,6 +59,7 @@ export default defineEventHandler(async (event) => {
     return {
       store: s,
       date,
+      // 祝日かつ -1 フォールバックを使う場合は日曜(0) が出るのは仕様どおり
       dayOfWeek: effectiveDow,
       isHoliday: !!holiday,
       holidayNote: holiday?.note ?? null,

@@ -1,29 +1,24 @@
 <script setup lang="ts">
-// 全店共通の店休日 (Holiday) を管理するパネル。
-// データモデル的には Holiday は店舗ごとに行を持つが、UI は「全店一括」で操作する：
-//   - 取得: 全店揃って登録されている日付のみ「店休日」として返す
-//   - 追加: 全店ぶん一括 createMany（既存はスキップ）
-//   - 編集: 旧日付を全店から削除し、新日付で全店ぶん作成（メモ更新含む）
-//   - 削除: 指定日付を全店から一括 deleteMany
-//
-// UI 構成は AdminPublicHolidaysPanel と揃える（年フィルタ + 一覧 + 追加/編集モーダル）。
-// 部分閉店 (Closure) は廃止済み。臨時の時間帯閉店は、予約管理画面で
-// 当該時間帯のベッドを埋める運用で代替する。
+import type { PublicHoliday } from '@prisma/client'
+import { createPublicHolidaySchema, updatePublicHolidaySchema } from '~~/shared/schemas/publicHoliday'
 
-type CommonHoliday = { date: string, note: string | null }
+// 国民の祝日（全店共通）の管理パネル。
+// 管理者(全店)モード専用ページ /dashboard/holidays から呼ばれる。
+// 年フィルタ + 一覧 + 追加/編集モーダル + 削除確認。
+// 影響: BusinessHour で dayOfWeek=-1 のレンジがあればそれを引き、無ければ日曜(0)にフォールバック。
 
 // 全データを一度取得して、年プルダウンの選択肢はそこから実データの年だけを抽出する。
 // （未登録の年を見せても意味がないので「2026 / 2027」のように登録済みの年のみ並べる）
-const { data: allHolidays, refresh, error } = await useFetch<CommonHoliday[]>(
-  '/api/admin/holidays',
-  { default: () => [] as CommonHoliday[] },
+const { data: allHolidays, refresh, error } = await useFetch<PublicHoliday[]>(
+  '/api/admin/public-holidays',
+  { default: () => [] as PublicHoliday[] },
 )
 
 // 登録済みの年（昇順）
 const yearOptions = computed<number[]>(() => {
   const set = new Set<number>()
   for (const h of allHolidays.value ?? []) {
-    set.add(Number(h.date.slice(0, 4)))
+    set.add(new Date(h.date).getUTCFullYear())
   }
   return Array.from(set).sort((a, b) => a - b)
 })
@@ -43,10 +38,10 @@ watchEffect(() => {
 })
 
 // 選択中の年で絞った一覧
-const holidays = computed<CommonHoliday[]>(() => {
+const holidays = computed<PublicHoliday[]>(() => {
   if (year.value === null) return []
   return (allHolidays.value ?? []).filter(
-    h => Number(h.date.slice(0, 4)) === year.value,
+    h => new Date(h.date).getUTCFullYear() === year.value,
   )
 })
 
@@ -69,16 +64,16 @@ function dayClass(d: Date): string {
 type EditorMode = 'create' | 'edit'
 const editorOpen = ref(false)
 const editorMode = ref<EditorMode>('create')
-// 編集対象は date 文字列（一意キー扱い）
-const editingDate = ref<string | null>(null)
+const editingId = ref<number | null>(null)
 
-const state = reactive<{ date: string, note: string }>({ date: '', note: '' })
+const state = reactive<{ date: string, name: string, note: string }>({ date: '', name: '', note: '' })
 const fieldErrors = ref<Record<string, string>>({})
 const formError = ref<string | null>(null)
 const submitting = ref(false)
 
 function resetForm() {
   state.date = ''
+  state.name = ''
   state.note = ''
   fieldErrors.value = {}
   formError.value = null
@@ -86,15 +81,17 @@ function resetForm() {
 
 function openCreate() {
   editorMode.value = 'create'
-  editingDate.value = null
+  editingId.value = null
   resetForm()
   editorOpen.value = true
 }
 
-function openEdit(h: CommonHoliday) {
+function openEdit(h: PublicHoliday) {
   editorMode.value = 'edit'
-  editingDate.value = h.date
-  state.date = h.date
+  editingId.value = h.id
+  // サーバ側は @db.Date で UTC 0 時として保存。ISO の先頭 10 文字でそのまま YYYY-MM-DD に。
+  state.date = new Date(h.date).toISOString().slice(0, 10)
+  state.name = h.name
   state.note = h.note ?? ''
   fieldErrors.value = {}
   formError.value = null
@@ -105,25 +102,31 @@ async function onSave() {
   fieldErrors.value = {}
   formError.value = null
 
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(state.date)) {
-    fieldErrors.value.date = '日付を選んでください'
-    formError.value = '入力内容を確認してください'
-    return
+  const schema = editorMode.value === 'create' ? createPublicHolidaySchema : updatePublicHolidaySchema
+  const payload = {
+    date: state.date,
+    name: state.name,
+    note: state.note.trim() === '' ? null : state.note,
   }
-  if (state.note.length > 200) {
-    fieldErrors.value.note = '200 文字以内で入力してください'
+  const parsed = schema.safeParse(payload)
+  if (!parsed.success) {
+    const errors: Record<string, string> = {}
+    for (const issue of parsed.error.issues) {
+      const key = issue.path.join('.')
+      if (!errors[key]) errors[key] = issue.message
+    }
+    fieldErrors.value = errors
     formError.value = '入力内容を確認してください'
     return
   }
 
-  const payload = { date: state.date, note: state.note.trim() === '' ? null : state.note }
   submitting.value = true
   try {
     if (editorMode.value === 'create') {
-      await $fetch('/api/admin/holidays', { method: 'POST', body: payload })
+      await $fetch('/api/admin/public-holidays', { method: 'POST', body: parsed.data })
     }
-    else if (editingDate.value) {
-      await $fetch(`/api/admin/holidays/${editingDate.value}`, { method: 'PATCH', body: payload })
+    else if (editingId.value) {
+      await $fetch(`/api/admin/public-holidays/${editingId.value}`, { method: 'PATCH', body: parsed.data })
     }
     editorOpen.value = false
     await refresh()
@@ -142,12 +145,12 @@ async function onSave() {
 }
 
 // ── 削除 ──────────────────────────────────────────
-const busy = ref<string | null>(null)
-async function onDelete(h: CommonHoliday) {
-  if (!confirm(`${dateFmt.format(new Date(h.date))} の店休日を削除しますか？（全店から削除されます）`)) return
-  busy.value = h.date
+const busy = ref<number | null>(null)
+async function onDelete(h: PublicHoliday) {
+  if (!confirm(`${dateFmt.format(new Date(h.date))} の「${h.name}」を削除しますか？`)) return
+  busy.value = h.id
   try {
-    await $fetch(`/api/admin/holidays/${h.date}`, { method: 'DELETE' })
+    await $fetch(`/api/admin/public-holidays/${h.id}`, { method: 'DELETE' })
     await refresh()
   }
   finally {
@@ -160,7 +163,7 @@ const errInput = 'border-red-600 focus:border-red-600 focus:shadow-[0_0_0_1px_#d
 </script>
 
 <template>
-  <div class="admin-holidays-panel">
+  <div class="admin-public-holidays-panel">
     <!-- ツールバー: 年フィルタ(左) + 追加(右) -->
     <div class="flex items-center justify-between gap-3 mb-3 flex-wrap">
       <div class="flex items-center gap-2">
@@ -187,7 +190,7 @@ const errInput = 'border-red-600 focus:border-red-600 focus:shadow-[0_0_0_1px_#d
         class="inline-flex items-center px-3 py-1.5 bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold rounded-sm shadow-sm whitespace-nowrap"
         @click="openCreate"
       >
-        ＋ 店休日を追加
+        ＋ 祝日を追加
       </button>
     </div>
 
@@ -211,6 +214,9 @@ const errInput = 'border-red-600 focus:border-red-600 focus:shadow-[0_0_0_1px_#d
             <th class="px-3 py-1.5 text-left font-semibold border-b border-[#c3c4c7] whitespace-nowrap w-48">
               日付
             </th>
+            <th class="px-3 py-1.5 text-left font-semibold border-b border-[#c3c4c7] w-48">
+              名称
+            </th>
             <th class="px-3 py-1.5 text-left font-semibold border-b border-[#c3c4c7]">
               メモ
             </th>
@@ -221,24 +227,27 @@ const errInput = 'border-red-600 focus:border-red-600 focus:shadow-[0_0_0_1px_#d
         </thead>
         <tbody class="admin-table-body">
           <tr v-if="holidays.length === 0" class="admin-table-empty">
-            <td colspan="3" class="px-3 py-6 text-center text-slate-500">
+            <td colspan="4" class="px-3 py-6 text-center text-slate-500">
               <template v-if="year !== null">
-                {{ year }}年の店休日はまだ登録されていません。「＋ 店休日を追加」から登録してください。
+                {{ year }}年の祝日はまだ登録されていません。「＋ 祝日を追加」から登録してください。
               </template>
               <template v-else>
-                店休日はまだ登録されていません。「＋ 店休日を追加」から登録してください。
+                祝日はまだ登録されていません。「＋ 祝日を追加」から登録してください。
               </template>
             </td>
           </tr>
           <tr
             v-for="h in holidays"
-            :key="h.date"
+            :key="h.id"
             class="admin-table-row group border-b border-[#f0f0f1] last:border-b-0 hover:bg-[#f6f7f7]"
           >
             <td class="px-3 py-1.5 align-middle">
               <span class="font-semibold tabular-nums" :class="dayClass(new Date(h.date))">
                 {{ dateFmt.format(new Date(h.date)) }}
               </span>
+            </td>
+            <td class="px-3 py-1.5 align-middle text-slate-700">
+              {{ h.name }}
             </td>
             <td class="px-3 py-1.5 align-middle text-slate-700">
               <span v-if="h.note">{{ h.note }}</span>
@@ -248,7 +257,7 @@ const errInput = 'border-red-600 focus:border-red-600 focus:shadow-[0_0_0_1px_#d
               <div class="opacity-0 group-hover:opacity-100 transition-opacity">
                 <button
                   type="button"
-                  :disabled="busy === h.date"
+                  :disabled="busy === h.id"
                   class="text-blue-700 hover:text-blue-900 hover:underline disabled:text-slate-400"
                   @click="openEdit(h)"
                 >
@@ -257,7 +266,7 @@ const errInput = 'border-red-600 focus:border-red-600 focus:shadow-[0_0_0_1px_#d
                 <span class="text-slate-300 mx-1.5">|</span>
                 <button
                   type="button"
-                  :disabled="busy === h.date"
+                  :disabled="busy === h.id"
                   class="text-red-700 hover:text-red-900 hover:underline disabled:text-slate-400"
                   @click="onDelete(h)"
                 >
@@ -275,7 +284,7 @@ const errInput = 'border-red-600 focus:border-red-600 focus:shadow-[0_0_0_1px_#d
       <template #content>
         <div class="bg-white p-5">
           <h2 class="text-lg font-semibold text-slate-900 mb-4">
-            店休日を{{ editorMode === 'create' ? '追加' : '編集' }}
+            祝日を{{ editorMode === 'create' ? '追加' : '編集' }}
           </h2>
 
           <UAlert
@@ -303,12 +312,27 @@ const errInput = 'border-red-600 focus:border-red-600 focus:shadow-[0_0_0_1px_#d
 
             <div>
               <label class="block text-sm font-semibold text-slate-900 mb-1.5">
+                名称 <span class="text-red-600">*</span>
+              </label>
+              <input
+                v-model="state.name"
+                type="text"
+                placeholder="例: 元日、成人の日、海の日 など"
+                :class="[baseInput, fieldErrors.name && errInput]"
+              >
+              <p v-if="fieldErrors.name" class="mt-1 text-xs text-red-700">
+                {{ fieldErrors.name }}
+              </p>
+            </div>
+
+            <div>
+              <label class="block text-sm font-semibold text-slate-900 mb-1.5">
                 メモ（任意）
               </label>
               <input
                 v-model="state.note"
                 type="text"
-                placeholder="例: 年末年始、研修、棚卸しなど"
+                placeholder="例: 振替休日、特別営業など"
                 :class="[baseInput, fieldErrors.note && errInput]"
               >
               <p v-if="fieldErrors.note" class="mt-1 text-xs text-red-700">

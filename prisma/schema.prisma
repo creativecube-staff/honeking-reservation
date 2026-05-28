@@ -34,7 +34,6 @@ model Store {
   menus          Menu[]
   businessHours  BusinessHour[]
   holidays       Holiday[]
-  closures       Closure[]
   reservations   Reservation[]
   products       Product[]
   productSales   ProductSale[]
@@ -210,7 +209,9 @@ model MenuStoreExclusion {
 model BusinessHour {
   id        Int      @id @default(autoincrement())
   storeId   Int
-  dayOfWeek Int // 0=日, 1=月, 2=火, 3=水, 4=木, 5=金, 6=土
+  // -1=祝日（PublicHoliday 該当日に引かれる）/ 0=日, 1=月, 2=火, 3=水, 4=木, 5=金, 6=土
+  // 祝日(-1) はオプション。-1 のレンジが無い店舗は祝日を日曜(0)にフォールバックする。
+  dayOfWeek Int
   startTime String // "HH:MM"
   endTime   String // "HH:MM"
   createdAt DateTime @default(now())
@@ -238,31 +239,14 @@ model Holiday {
   @@index([storeId, date])
 }
 
-// 部分閉店（イレギュラーで一定時間だけ休み・同日複数行可）
-// 終日休みは Holiday テーブルで表現する（こちらは時間レンジ必須）
-// 例: 2026-06-15 14:00-16:00 設備点検で閉店
-model Closure {
-  id        Int      @id @default(autoincrement())
-  storeId   Int
-  date      DateTime @db.Date
-  startTime String // "HH:MM"
-  endTime   String // "HH:MM"
-  note      String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  store Store @relation(fields: [storeId], references: [id], onDelete: Restrict)
-
-  @@unique([storeId, date, startTime])
-  @@index([storeId, date])
-}
-
-// 国の祝日（全店舗共通・営業はするが「日曜扱い」で運用）
-// アプリ層は date が PublicHoliday に該当する日は BusinessHour の dayOfWeek=0（日曜）を引く。
+// 国の祝日（全店舗共通・営業はする）
+// 各店舗が BusinessHour に dayOfWeek=-1 のレンジを持っていれば祝日扱いで引かれる。
+// 持っていなければ従来どおり日曜(0)にフォールバック（後方互換）。
 model PublicHoliday {
   id        Int      @id @default(autoincrement())
   date      DateTime @unique @db.Date
   name      String
+  note      String? // 任意のメモ（運用上の補足など）。店休日と同じ感覚で書き込める。
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }

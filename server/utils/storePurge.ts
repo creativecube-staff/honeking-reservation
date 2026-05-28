@@ -39,7 +39,6 @@ export interface StorePurgeCounts {
   products: number
   businessHours: number
   holidays: number
-  closures: number
   beds: number
   staffs: number
   logins: number
@@ -63,7 +62,6 @@ export async function computeStoreBlastRadius(storeId: number): Promise<StoreBla
     products,
     businessHours,
     holidays,
-    closures,
     beds,
     crossStoreReservations,
   ] = await Promise.all([
@@ -73,7 +71,6 @@ export async function computeStoreBlastRadius(storeId: number): Promise<StoreBla
     prisma.product.count({ where: { storeId } }),
     prisma.businessHour.count({ where: { storeId } }),
     prisma.holiday.count({ where: { storeId } }),
-    prisma.closure.count({ where: { storeId } }),
     prisma.bed.count({ where: { storeId } }),
     // この店舗所属のスタッフが「他店」予約を担当しているか（Staff は storeId と別の店舗で予約を持てる仕組みは今は無いが、念のため検知）
     prisma.reservation.count({ where: { staffId: { in: staffIds }, storeId: { not: storeId } } }),
@@ -90,7 +87,6 @@ export async function computeStoreBlastRadius(storeId: number): Promise<StoreBla
       products,
       businessHours,
       holidays,
-      closures,
       beds,
       staffs: staffIds.length,
       logins: loginIds.length,
@@ -132,17 +128,15 @@ export async function purgeStore(storeId: number) {
     await tx.businessHour.deleteMany({ where: { storeId } })
     // 9. 店休日
     await tx.holiday.deleteMany({ where: { storeId } })
-    // 10. 部分閉店
-    await tx.closure.deleteMany({ where: { storeId } })
-    // 11. 店舗特別商品
+    // 10. 店舗特別商品
     await tx.product.deleteMany({ where: { storeId } })
-    // 12. ベッド
+    // 11. ベッド
     await tx.bed.deleteMany({ where: { storeId } })
-    // 13. スタッフ
+    // 12. スタッフ
     await tx.staff.deleteMany({ where: { storeId } })
-    // 14. ログインアカウント（LoginHistory は onDelete: SetNull なので残る）
+    // 13. ログインアカウント（LoginHistory は onDelete: SetNull なので残る）
     await tx.login.deleteMany({ where: { storeId } })
-    // 15. 店舗本体
+    // 14. 店舗本体
     await tx.store.delete({ where: { id: storeId } })
   })
 }

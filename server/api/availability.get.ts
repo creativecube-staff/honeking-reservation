@@ -1,4 +1,5 @@
 import { MAX_ADVANCE_DAYS, SLOT_STEP_MINUTES } from '~~/shared/reservationPolicy'
+import { DOW_PUBLIC_HOLIDAY, isStaffWorkingOnPublicHoliday, resolveBusinessHourDow } from '~~/shared/businessHours'
 import { prisma } from '../utils/prisma'
 
 // お客様側: 指定店舗・指定メニューの空き枠を期間で返す。
@@ -8,7 +9,7 @@ import { prisma } from '../utils/prisma'
 //
 // アルゴリズム:
 // 1. 期間内の各日付について
-//    - PublicHoliday なら日曜扱い、そうでなければ getUTCDay()
+//    - PublicHoliday なら祝日(-1) レンジ優先、無ければ日曜(0) にフォールバック
 //    - Holiday に該当なら slots 空
 //    - その曜日の BusinessHour レンジを取得
 //    - 各レンジ内で SLOT_STEP_MINUTES 分刻みのスロット候補を生成し、メニュー時間 + 制約をすべて満たすものだけ採用
@@ -113,10 +114,9 @@ export default defineEventHandler(async (event) => {
   }
 
   // 期間内の関連データをまとめて取得
-  const [businessHours, holidays, closures, publicHolidays, beds, staffs, reservations] = await Promise.all([
+  const [businessHours, holidays, publicHolidays, beds, staffs, reservations] = await Promise.all([
     prisma.businessHour.findMany({ where: { storeId: store.id } }),
     prisma.holiday.findMany({ where: { storeId: store.id, date: { gte: fromDate, lte: toDate } } }),
-    prisma.closure.findMany({ where: { storeId: store.id, date: { gte: fromDate, lte: toDate } } }),
     prisma.publicHoliday.findMany({ where: { date: { gte: fromDate, lte: toDate } } }),
     prisma.bed.findMany({ where: { storeId: store.id, isActive: true }, select: { id: true } }),
     // この店舗に所属し予約割当可能なスタッフ + 基本シフト曜日
@@ -138,12 +138,8 @@ export default defineEventHandler(async (event) => {
   // ─ 索引作成 ─
   const holidayDates = new Set(holidays.map(h => ymdOf(h.date)))
   const publicHolidayMap = new Map(publicHolidays.map(p => [ymdOf(p.date), p.name]))
-  const closuresByDate = new Map<string, { startMin: number, endMin: number }[]>()
-  for (const c of closures) {
-    const key = ymdOf(c.date)
-    if (!closuresByDate.has(key)) closuresByDate.set(key, [])
-    closuresByDate.get(key)!.push({ startMin: parseHm(c.startTime), endMin: parseHm(c.endTime) })
-  }
+  // この店舗が祝日(-1)レンジを 1 件以上持っているか（祝日 → 日曜フォールバック判定用）
+  const hasHolidayRanges = businessHours.some(b => b.dayOfWeek === DOW_PUBLIC_HOLIDAY)
   // (date, staffId) → 予約レンジ list  ※ 時刻は JST 日内分（BusinessHour と同じ基準）
   const reservationsByDateStaff = new Map<string, { startMin: number, endMin: number }[]>()
   // (date, bedId) → 予約レンジ list
@@ -205,7 +201,8 @@ export default defineEventHandler(async (event) => {
     const ymd = ymdOf(d)
     const pubName = publicHolidayMap.get(ymd) ?? null
     const isPublicHoliday = !!pubName
-    const dayOfWeek = isPublicHoliday ? 0 : d.getUTCDay()
+    // BusinessHour を引くための実効曜日（祝日かつ -1 行があれば -1、なければ日曜にフォールバック）
+    const dayOfWeek = resolveBusinessHourDow(isPublicHoliday, d.getUTCDay(), hasHolidayRanges)
     const isHoliday = holidayDates.has(ymd)
 
     // メニューの表示期間
@@ -251,7 +248,6 @@ export default defineEventHandler(async (event) => {
       continue
     }
 
-    const dayClosures = closuresByDate.get(ymd) ?? []
     const slots: SlotOut[] = []
 
     // 最終レンジ(=閉店)は「最終受付」扱いで開始が閉店時刻までOK、それ以外は施術が休憩前に終わる枠のみ
@@ -262,8 +258,6 @@ export default defineEventHandler(async (event) => {
       // スロット候補は SLOT_STEP_MINUTES 刻み
       for (let s = range.startMin; s <= maxStart; s += SLOT_STEP_MINUTES) {
         const e = s + menu.durationMinutes
-        // Closure と重なるなら不可（時間軸的にも候補から外す）
-        if (overlapsAny(dayClosures, s, e)) continue
 
         // 空きベッド数
         let freeBeds = 0
@@ -272,11 +266,15 @@ export default defineEventHandler(async (event) => {
           if (!overlapsAny(rs, s, e)) freeBeds++
         }
 
-        // 空きスタッフ数（基本シフト曜日に含まれる + 他予約と被らない）
+        // 空きスタッフ数（基本シフトに該当 + 他予約と被らない）
         // 出勤時間帯は店舗の営業時間レンジに従う(最終レンジは最終受付時刻まで担当可)
+        // 祝日は isStaffWorkingOnPublicHoliday で「-1 を含む OR (-1 を含まないかつ日曜出勤)」を判定。
         let freeStaff = 0
         for (const st of staffs) {
-          if (!st.baseShiftDays.includes(dayOfWeek)) continue
+          const isWorking = isPublicHoliday
+            ? isStaffWorkingOnPublicHoliday(st.baseShiftDays)
+            : st.baseShiftDays.includes(dayOfWeek)
+          if (!isWorking) continue
           const rs = reservationsByDateStaff.get(`${ymd}:${st.id}`) ?? []
           if (overlapsAny(rs, s, e)) continue
           freeStaff++

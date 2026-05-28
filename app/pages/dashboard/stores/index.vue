@@ -1,14 +1,10 @@
 <script setup lang="ts">
 import type { Store } from '@prisma/client'
 
-// WordPress 風の店舗一覧画面（wp-list-table 模倣）
+// WordPress 風の店舗一覧画面（wp-list-table 模倣）。
+// 管理者(全店)モード専用。店舗の追加・編集・無効化・完全削除を行う。
+// 店休日・祝日は別ページ /dashboard/holidays に分離済み。
 definePageMeta({ layout: 'admin' })
-
-// 店舗スイッチャーのコンテキスト。
-// 全店（管理者）= 店舗一覧 + 新規登録 / 店舗選択中 = その店舗の店休日。
-// 分岐は selectedStoreId を主軸にし、store-context（canAccessAll）解決前は「読み込み中」を出して
-// 「中身が空」の状態を作らない。
-const { selectedStoreId, canAccessAll, selectedStoreName } = useStoreContext()
 
 type Status = 'all' | 'active' | 'inactive'
 const status = ref<Status>('all')
@@ -118,7 +114,6 @@ interface PurgeCounts {
   products: number
   businessHours: number
   holidays: number
-  closures: number
   beds: number
   staffs: number
   logins: number
@@ -142,7 +137,6 @@ const purgeCountLabels: { key: keyof PurgeCounts, label: string }[] = [
   { key: 'products', label: '店舗特別商品' },
   { key: 'businessHours', label: '営業時間' },
   { key: 'holidays', label: '店休日' },
-  { key: 'closures', label: '部分閉店' },
   { key: 'beds', label: 'ベッド' },
   { key: 'staffs', label: 'スタッフ' },
   { key: 'logins', label: 'ログインアカウント' },
@@ -228,19 +222,6 @@ const dateFmt = new Intl.DateTimeFormat('ja-JP', {
 
 <template>
   <div>
-    <!-- 店舗選択中: 自店の店休日のみ（基本情報・ベッド・営業時間は管理者モード専用） -->
-    <div v-if="selectedStoreId != null">
-      <h1 class="text-2xl font-semibold text-slate-900 mb-1">
-        店休日
-      </h1>
-      <p class="text-sm text-slate-600 mb-4">
-        {{ selectedStoreName }} の休業日（終日休み）を登録します。
-      </p>
-      <AdminScheduleHolidaysPanel v-if="selectedStoreId" :store-id="selectedStoreId" />
-    </div>
-
-    <!-- 全店（管理者）: 店舗一覧 -->
-    <template v-else-if="canAccessAll">
     <AdminDetailHeader title="店舗管理" description="店舗の追加・編集・無効化を行います。">
       <!-- 新規追加はタイトルの隣（バッジ位置）に置く -->
       <NuxtLink
@@ -540,12 +521,6 @@ const dateFmt = new Intl.DateTimeFormat('ja-JP', {
           </button>
         </div>
       </div>
-    </div>
-    </template>
-
-    <!-- 店舗コンテキスト解決待ち（稀）。ここで空白を出さない -->
-    <div v-else class="py-12 text-center text-sm text-slate-500">
-      読み込み中…
     </div>
   </div>
 </template>

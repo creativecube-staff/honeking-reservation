@@ -74,13 +74,24 @@ const filtered = computed(() => {
 // ── 表示用ヘルパ ──────────────────────────────────────
 const dateFmt = new Intl.DateTimeFormat('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit' })
 
-const DAY_LABELS = ['日', '月', '火', '水', '木', '金', '土']
-const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0] // 月→日の並び
+// 曜日のメタ情報。-1=祝日, 0=日, …, 6=土。
+const DAY_META: Record<number, { label: string, weekend: boolean }> = {
+  [-1]: { label: '祝', weekend: true },
+  0: { label: '日', weekend: true },
+  1: { label: '月', weekend: false },
+  2: { label: '火', weekend: false },
+  3: { label: '水', weekend: false },
+  4: { label: '木', weekend: false },
+  5: { label: '金', weekend: false },
+  6: { label: '土', weekend: true },
+}
+// 月→日→祝 の並び（土日と同色で末尾に祝を置く）
+const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0, -1]
 function shiftBadges(days: number[]): { label: string, on: boolean, weekend: boolean }[] {
   return DAY_ORDER.map(d => ({
-    label: DAY_LABELS[d]!,
+    label: DAY_META[d]!.label,
     on: days.includes(d),
-    weekend: d === 0 || d === 6,
+    weekend: DAY_META[d]!.weekend,
   }))
 }
 function genderLabel(g: 'MALE' | 'FEMALE' | null): string {
@@ -327,6 +338,7 @@ async function confirmPurge() {
 }
 
 // ── 基本シフトのチップ（編集モーダル用） ─────────────────
+// value=-1 は祝日（PublicHoliday 該当日）。チェックしないと「日曜の出勤可否」へフォールバックする。
 const FORM_DAYS: { value: number, label: string, weekend: boolean }[] = [
   { value: 1, label: '月', weekend: false },
   { value: 2, label: '火', weekend: false },
@@ -335,6 +347,7 @@ const FORM_DAYS: { value: number, label: string, weekend: boolean }[] = [
   { value: 5, label: '金', weekend: false },
   { value: 6, label: '土', weekend: true },
   { value: 0, label: '日', weekend: true },
+  { value: -1, label: '祝', weekend: true },
 ]
 
 const baseInput = 'w-full px-2.5 py-2 text-sm border border-[#8c8f94] rounded-sm bg-white shadow-[inset_0_1px_2px_rgba(0,0,0,0.07)] focus:outline-none focus:border-orange-500 focus:shadow-[0_0_0_1px_#f97316]'
@@ -668,6 +681,9 @@ const errInput = 'border-red-600 focus:border-red-600 focus:shadow-[0_0_0_1px_#d
                   </span>
                 </label>
               </div>
+              <p class="mt-2 text-xs text-slate-500 leading-relaxed">
+                「祝」は国民の祝日。チェックしない場合は日曜の出勤可否がそのまま適用されます。
+              </p>
             </div>
 
             <div class="flex items-center gap-2 pt-2 border-t border-[#dcdcde]">

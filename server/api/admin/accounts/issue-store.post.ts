@@ -25,8 +25,8 @@ export default defineEventHandler(async (event) => {
   }
 
   // 既に店舗ログイン（MANAGER）があれば二重発行しない（パスワード再発行を使ってもらう）
-  const existing = await prisma.practitioner.findFirst({
-    where: { storeId, canLogin: true, role: 'MANAGER' },
+  const existing = await prisma.login.findFirst({
+    where: { storeId, role: 'MANAGER' },
     select: { id: true },
   })
   if (existing) {
@@ -37,19 +37,16 @@ export default defineEventHandler(async (event) => {
   const passwordHash = await bcrypt.hash(password, 10)
 
   try {
-    const account = await prisma.practitioner.create({
+    const account = await prisma.login.create({
       data: {
         storeId: store.id,
-        name: store.name,
-        displayOrder: 0,
-        isActive: true,
-        isAssignable: false,
-        canLogin: true,
+        displayName: store.name,
         username: store.slug,
         passwordHash,
         passwordEnc: encryptUtf8(password),
         role: 'MANAGER',
         permissions: [],
+        isActive: true,
       },
       select: { username: true },
     })

@@ -22,7 +22,7 @@ const { selectedStoreId, canAccessAll, selectedStoreName } = useStoreContext()
 
     <!-- 全店（管理者）= 共通メニュー -->
     <div v-else-if="canAccessAll">
-      <AdminDetailHeader title="メニュー管理">
+      <AdminDetailHeader title="共通メニュー管理">
         <template #description>
           共通メニュー（全店舗で自動的に利用可能）を管理します。<br>
           店舗ごとの特別メニューは、対象店舗に切り替えてメニューで登録してください。

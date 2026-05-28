@@ -105,7 +105,7 @@ export default defineEventHandler(async (event) => {
             reservationId: null,
             quantity: item.quantity,
             unitPriceJpyAtSale: product.priceJpy,
-            soldByPractitionerId: currentUser.id,
+            soldByLoginId: currentUser.id,
             note: item.note?.trim() || null,
           },
         })

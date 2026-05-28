@@ -43,11 +43,11 @@ async function isRateLimited(username: string, ip: string | null): Promise<boole
 
 // ログイン履歴を 1 件記録（成功・失敗どちらも）+ 低頻度で古い履歴を間引く。
 // 履歴記録の失敗がログイン処理自体を巻き込まないよう、内部で握りつぶす。
-async function recordLogin(opts: { practitionerId: number | null, username: string, success: boolean, ip: string | null, userAgent: string | null }) {
+async function recordLogin(opts: { loginId: number | null, username: string, success: boolean, ip: string | null, userAgent: string | null }) {
   try {
     await prisma.loginHistory.create({
       data: {
-        practitionerId: opts.practitionerId,
+        loginId: opts.loginId,
         usernameAttempted: opts.username,
         success: opts.success,
         ipAddress: opts.ip,
@@ -78,36 +78,36 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 429, statusMessage: '試行回数が多すぎます。15 分ほど待ってから再度お試しください。' })
   }
 
-  // ログイン許可スタッフのみ対象。isActive=false や canLogin=false なら拒否。
-  const staff = await prisma.practitioner.findUnique({ where: { username } })
+  // Login（管理画面ログインアカウント）のみ対象。isActive=false なら拒否。
+  const login = await prisma.login.findUnique({ where: { username } })
 
   // ユーザーが居なくてもダミーハッシュで比較し、タイミング差から「存在するか」を漏らさない。
-  const passOk = await bcrypt.compare(password, staff?.passwordHash ?? DUMMY_HASH)
+  const passOk = await bcrypt.compare(password, login?.passwordHash ?? DUMMY_HASH)
 
-  if (!staff || !passOk || !staff.canLogin || !staff.isActive || !staff.role) {
+  if (!login || !passOk || !login.isActive) {
     // 失敗を記録（狙われた username は生で、該当アカウントが見つかれば id も残す）
-    await recordLogin({ practitionerId: staff?.id ?? null, username, success: false, ip, userAgent })
+    await recordLogin({ loginId: login?.id ?? null, username, success: false, ip, userAgent })
     throw createError({ statusCode: 401, statusMessage: 'ユーザー名またはパスワードが違います' })
   }
 
-  const permissions = resolvePermissions(staff.role, staff.permissions)
+  const permissions = resolvePermissions(login.role, login.permissions)
 
   await setUserSession(event, {
     user: {
-      id: staff.id,
-      username: staff.username!,
-      displayName: staff.name,
-      role: staff.role,
+      id: login.id,
+      username: login.username,
+      displayName: login.displayName,
+      role: login.role,
       permissions,
       // 店舗スコープ判定用の所属店舗
-      storeId: staff.storeId,
+      storeId: login.storeId,
     },
     loggedInAt: new Date().toISOString(),
   })
 
   // 成功を記録 + 最終ログイン日時を更新（どちらも失敗してもログインは成立させる）
-  await recordLogin({ practitionerId: staff.id, username, success: true, ip, userAgent })
-  await prisma.practitioner.update({ where: { id: staff.id }, data: { lastLoginAt: new Date() } }).catch(() => {})
+  await recordLogin({ loginId: login.id, username, success: true, ip, userAgent })
+  await prisma.login.update({ where: { id: login.id }, data: { lastLoginAt: new Date() } }).catch(() => {})
 
   return { ok: true }
 })

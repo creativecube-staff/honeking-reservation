@@ -13,8 +13,12 @@ import { requirePermission } from '../../../utils/requirePermission'
 // 集計軸:
 //   - 日別合計（折れ線表示用）
 //   - 店舗別内訳（施術 / 物販 / 回数券販売）
-//   - スタッフ別: 施術担当者の施術売上 + 販売者の販売売上を合算
+//   - スタッフ別: 担当した予約の施術売上ランキング（Staff テーブル）
 //   - 商品別: 物販・回数券をまとめて売上ランキング
+//
+// 注: Staff（店舗で働く人）と Login（ログインユーザー）は別テーブルなので、
+//     「施術売上」は Staff 単位、「物販・回数券販売の担当者」は Login 単位で別軸になる。
+//     既存 UI 互換のため byStaff は Staff の施術売上のみで集計する。
 export default defineEventHandler(async (event) => {
   await requirePermission(event, 'sale:view')
 
@@ -34,7 +38,7 @@ export default defineEventHandler(async (event) => {
 
   const storeFilter = storeId ? { storeId } : {}
 
-  const [stores, reservations, sales, staffList] = await Promise.all([
+  const [stores, reservations, sales] = await Promise.all([
     prisma.store.findMany({ where: { isActive: true }, orderBy: { displayOrder: 'asc' }, select: { id: true, name: true } }),
     prisma.reservation.findMany({
       where: {
@@ -46,8 +50,8 @@ export default defineEventHandler(async (event) => {
       select: {
         storeId: true,
         startAt: true,
-        practitionerId: true,
-        practitioner: { select: { id: true, name: true } },
+        staffId: true,
+        staff: { select: { id: true, name: true } },
         menu: { select: { id: true, name: true, priceJpy: true } },
       },
     }),
@@ -58,12 +62,11 @@ export default defineEventHandler(async (event) => {
         soldAt: true,
         quantity: true,
         unitPriceJpyAtSale: true,
-        soldByPractitionerId: true,
-        soldByPractitioner: { select: { id: true, name: true } },
+        soldByLoginId: true,
+        soldByLogin: { select: { id: true, displayName: true } },
         product: { select: { id: true, name: true, kind: true } },
       },
     }),
-    prisma.practitioner.findMany({ where: { isActive: true }, select: { id: true, name: true } }),
   ])
 
   function ymdJst(d: Date): string {
@@ -109,16 +112,15 @@ export default defineEventHandler(async (event) => {
     const amount = r.menu.priceJpy
     bumpDay(r.startAt, 'menu', amount)
     bumpStore(r.storeId, 'menu', amount)
-    bumpStaff(r.practitioner.id, r.practitioner.name, 'menu', amount)
+    bumpStaff(r.staff.id, r.staff.name, 'menu', amount)
   }
   for (const s of sales) {
     const amount = s.unitPriceJpyAtSale * s.quantity
     const key = s.product.kind === 'VOUCHER' ? 'voucher' : 'product'
     bumpDay(s.soldAt, key, amount)
     bumpStore(s.storeId, key, amount)
-    if (s.soldByPractitioner) {
-      bumpStaff(s.soldByPractitioner.id, s.soldByPractitioner.name, key, amount)
-    }
+    // 販売の担当者は Login（管理画面ログインユーザー）。Staff とは別空間なので byStaff には混ぜない。
+    // 必要なら別軸（bySoldBy）として API レスポンスに追加する。
     const cur = byProduct.get(s.product.id) ?? { productId: s.product.id, productName: s.product.name, kind: s.product.kind, quantity: 0, revenue: 0 }
     cur.quantity += s.quantity
     cur.revenue += amount

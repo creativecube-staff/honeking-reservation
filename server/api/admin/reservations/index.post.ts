@@ -13,7 +13,7 @@ import { generateReservationCode } from '../../../utils/reservationCode'
 const createSchema = z.object({
   storeId: z.number().int().positive(),
   menuId: z.number().int().positive(),
-  practitionerId: z.number().int().positive().optional(),
+  staffId: z.number().int().positive().optional(),
   bedId: z.number().int().positive().optional(),
   startAt: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{4}$/, 'startAt は YYYY-MM-DDTHHMM'),
   customer: z.union([
@@ -49,7 +49,7 @@ export default defineEventHandler(async (event) => {
     })
   }
   const { storeId, menuId, startAt: startAtStr, customer, note, forceOverride } = parsed.data
-  const practitionerIdReq = parsed.data.practitionerId ?? null
+  const staffIdReq = parsed.data.staffId ?? null
   const bedIdReq = parsed.data.bedId ?? null
 
   const ymd = startAtStr.slice(0, 10)
@@ -81,23 +81,17 @@ export default defineEventHandler(async (event) => {
 
   const dateDb = new Date(`${ymd}T00:00:00Z`)
 
-  const [businessHours, holidays, closures, publicHoliday, beds, practitioners, shifts, reservations] = await Promise.all([
+  const [businessHours, holidays, closures, publicHoliday, beds, staffs, reservations] = await Promise.all([
     prisma.businessHour.findMany({ where: { storeId: store.id } }),
     prisma.holiday.findMany({ where: { storeId: store.id, date: dateDb } }),
     prisma.closure.findMany({ where: { storeId: store.id, date: dateDb } }),
     prisma.publicHoliday.findUnique({ where: { date: dateDb } }),
     prisma.bed.findMany({ where: { storeId: store.id, isActive: true }, select: { id: true } }),
-    // 予約に割り当て可能なスタッフのみ（オーナー等の特別アカウントは除外）
-    prisma.practitioner.findMany({ where: { isActive: true, isAssignable: true }, select: { id: true, storeId: true } }),
-    prisma.shift.findMany({
-      where: {
-        date: dateDb,
-        OR: [
-          { workStoreId: store.id },
-          { workStoreId: null, practitioner: { storeId: store.id } },
-        ],
-      },
-      select: { practitionerId: true, startTime: true, endTime: true },
+    // この店舗所属の予約割当可能スタッフ + 基本シフト曜日（自動割当のため assignOrder 昇順）
+    prisma.staff.findMany({
+      where: { storeId: store.id, isActive: true, isAssignable: true },
+      orderBy: [{ assignOrder: 'asc' }, { id: 'asc' }],
+      select: { id: true, baseShiftDays: true },
     }),
     prisma.reservation.findMany({
       where: {
@@ -105,7 +99,7 @@ export default defineEventHandler(async (event) => {
         status: 'CONFIRMED',
         startAt: { gte: new Date(`${ymd}T00:00:00+09:00`), lt: new Date(new Date(`${ymd}T00:00:00+09:00`).getTime() + 86_400_000) },
       },
-      select: { bedId: true, practitionerId: true, startAt: true, endAt: true },
+      select: { bedId: true, staffId: true, startAt: true, endAt: true },
     }),
   ])
 
@@ -128,15 +122,15 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  // ベッド・施術者の決定
+  // ベッド・スタッフの決定
   const usedBeds = new Set<number>()
-  const usedPractitioners = new Set<number>()
+  const usedStaffs = new Set<number>()
   for (const r of reservations) {
     const rs = new Date(r.startAt).getTime()
     const re = new Date(r.endAt).getTime()
     if (rs < endAt.getTime() && re > startAt.getTime()) {
       usedBeds.add(r.bedId)
-      usedPractitioners.add(r.practitionerId)
+      usedStaffs.add(r.staffId)
     }
   }
 
@@ -155,34 +149,29 @@ export default defineEventHandler(async (event) => {
     bedId = free.id
   }
 
-  const shiftMap = new Map<number, { startMin: number, endMin: number }>()
-  for (const s of shifts) shiftMap.set(s.practitionerId, { startMin: parseHm(s.startTime), endMin: parseHm(s.endTime) })
+  // 当日の曜日(祝日=日曜扱い)
+  const effectiveDow = publicHoliday ? 0 : dateDb.getUTCDay()
 
-  let practitionerId: number
-  if (practitionerIdReq) {
-    const p = practitioners.find(x => x.id === practitionerIdReq)
-    if (!p) throw createError({ statusCode: 400, statusMessage: '指定の施術者が見つかりません' })
-    if (usedPractitioners.has(practitionerIdReq) && !forceOverride) {
-      throw createError({ statusCode: 409, statusMessage: '指定の施術者はその時間帯すでに予約に入っています' })
+  let staffId: number
+  if (staffIdReq) {
+    const st = staffs.find(x => x.id === staffIdReq)
+    if (!st) throw createError({ statusCode: 400, statusMessage: '指定のスタッフが見つかりません' })
+    if (usedStaffs.has(staffIdReq) && !forceOverride) {
+      throw createError({ statusCode: 409, statusMessage: '指定のスタッフはその時間帯すでに予約に入っています' })
     }
-    // シフトチェック（force でなければ）
-    if (!forceOverride) {
-      const sh = shiftMap.get(practitionerIdReq)
-      if (!sh || sh.startMin > startMin || sh.endMin < endMin) {
-        throw createError({ statusCode: 409, statusMessage: '指定の施術者はその時間シフトに入っていません' })
-      }
+    // 基本シフト曜日チェック（force でなければ）
+    if (!forceOverride && !st.baseShiftDays.includes(effectiveDow)) {
+      throw createError({ statusCode: 409, statusMessage: '指定のスタッフはこの曜日は出勤予定がありません' })
     }
-    practitionerId = practitionerIdReq
+    staffId = staffIdReq
   }
   else {
-    const free = practitioners.find((p) => {
-      if (usedPractitioners.has(p.id)) return false
-      const sh = shiftMap.get(p.id)
-      if (!sh) return false
-      return sh.startMin <= startMin && endMin <= sh.endMin
+    const free = staffs.find((st) => {
+      if (usedStaffs.has(st.id)) return false
+      return st.baseShiftDays.includes(effectiveDow)
     })
-    if (!free) throw createError({ statusCode: 409, statusMessage: '空いている施術者がいません' })
-    practitionerId = free.id
+    if (!free) throw createError({ statusCode: 409, statusMessage: '空いているスタッフがいません' })
+    staffId = free.id
   }
 
   // 顧客
@@ -235,7 +224,7 @@ export default defineEventHandler(async (event) => {
         data: {
           storeId: store!.id,
           bedId,
-          practitionerId,
+          staffId,
           menuId: menu!.id,
           customerId,
           startAt,

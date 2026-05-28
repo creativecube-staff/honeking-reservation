@@ -14,19 +14,19 @@ type ReservationStatus = DbStatus
 type ReservationHistoryRow = {
   id: number
   changedAt: string
-  changedByPractitionerId: number | null
+  changedByLoginId: number | null
   changedByName: string
   prevStartAt: string
   prevEndAt: string
   prevStatus: ReservationStatus
   prevMenuId: number
-  prevPractitionerId: number
+  prevStaffId: number
   prevBedId: number
   newStartAt: string
   newEndAt: string
   newStatus: ReservationStatus
   newMenuId: number
-  newPractitionerId: number
+  newStaffId: number
   newBedId: number
   note: string | null
 }
@@ -66,7 +66,7 @@ type ReservationDetail = {
   createdAt: string
   store: { id: number, name: string, address: string, phone: string | null }
   bed: { id: number, name: string }
-  practitioner: { id: number, name: string, storeId: number }
+  staff: { id: number, name: string, storeId: number }
   menu: { id: number, name: string, durationMinutes: number, priceJpy: number }
   customer: { id: number, name: string | null, phone: string | null, email: string | null }
   histories: ReservationHistoryRow[]
@@ -165,7 +165,7 @@ const editForm = reactive({
   time: '',
   menuId: null as number | null,
   autoAssign: true,
-  practitionerId: null as number | null,
+  staffId: null as number | null,
   bedId: null as number | null,
   historyNote: '',
   forceOverride: false,
@@ -178,7 +178,7 @@ function resetEditForm() {
   editForm.time = jstHm(reservation.value.startAt)
   editForm.menuId = reservation.value.menu.id
   editForm.autoAssign = true
-  editForm.practitionerId = reservation.value.practitioner.id
+  editForm.staffId = reservation.value.staff.id
   editForm.bedId = reservation.value.bed.id
   editForm.historyNote = ''
   editForm.forceOverride = false
@@ -255,7 +255,7 @@ async function saveReschedule() {
   if (editSubmitting.value) return
   editError.value = null
 
-  const { date, time, menuId, autoAssign, practitionerId, bedId, historyNote, forceOverride } = editForm
+  const { date, time, menuId, autoAssign, staffId, bedId, historyNote, forceOverride } = editForm
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(time)) {
     editError.value = '日時が不正です'
     return
@@ -272,7 +272,7 @@ async function saveReschedule() {
     body.autoAssign = true
   }
   else {
-    if (practitionerId) body.practitionerId = practitionerId
+    if (staffId) body.staffId = staffId
     if (bedId) body.bedId = bedId
   }
 
@@ -431,8 +431,8 @@ function summarizeHistory(h: ReservationHistoryRow): { items: { label: string, b
   if (h.prevMenuId !== h.newMenuId) {
     items.push({ label: 'メニュー', before: menuName(h.prevMenuId), after: menuName(h.newMenuId) })
   }
-  if (h.prevPractitionerId !== h.newPractitionerId) {
-    items.push({ label: '担当', before: staffName(h.prevPractitionerId), after: staffName(h.newPractitionerId) })
+  if (h.prevStaffId !== h.newStaffId) {
+    items.push({ label: '担当', before: staffName(h.prevStaffId), after: staffName(h.newStaffId) })
   }
   if (h.prevBedId !== h.newBedId) {
     items.push({ label: 'ベッド', before: bedName(h.prevBedId), after: bedName(h.newBedId) })
@@ -525,7 +525,7 @@ void ROLE_LABEL
               <div>
                 <dt class="text-xs text-slate-500">担当</dt>
                 <dd class="text-slate-900">
-                  {{ reservation.practitioner.name }}
+                  {{ reservation.staff.name }}
                 </dd>
               </div>
               <div>
@@ -662,7 +662,7 @@ void ROLE_LABEL
             <div>
               <label class="block text-xs font-semibold text-slate-700 mb-1">担当スタッフ</label>
               <select
-                v-model.number="editForm.practitionerId"
+                v-model.number="editForm.staffId"
                 class="w-full px-2.5 py-2 text-sm border border-[#8c8f94] rounded-sm bg-white focus:outline-none focus:border-orange-500"
               >
                 <option :value="null">

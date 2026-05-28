@@ -101,23 +101,18 @@ export default defineEventHandler(async (event) => {
 
   // その日の関連データ
   const dayOfWeek = dateDb.getUTCDay()
-  const [businessHours, holidays, closures, publicHoliday, beds, practitioners, shifts, reservations] = await Promise.all([
+  const [businessHours, holidays, closures, publicHoliday, beds, staffs, reservations] = await Promise.all([
     prisma.businessHour.findMany({ where: { storeId: store.id } }),
     prisma.holiday.findMany({ where: { storeId: store.id, date: dateDb } }),
     prisma.closure.findMany({ where: { storeId: store.id, date: dateDb } }),
     prisma.publicHoliday.findUnique({ where: { date: dateDb } }),
     prisma.bed.findMany({ where: { storeId: store.id, isActive: true }, select: { id: true } }),
-    // 予約に割り当て可能なスタッフのみ（オーナー等の特別アカウントは除外）
-    prisma.practitioner.findMany({ where: { isActive: true, isAssignable: true }, select: { id: true, storeId: true } }),
-    prisma.shift.findMany({
-      where: {
-        date: dateDb,
-        OR: [
-          { workStoreId: store.id },
-          { workStoreId: null, practitioner: { storeId: store.id } },
-        ],
-      },
-      select: { practitionerId: true, startTime: true, endTime: true },
+    // この店舗所属の予約割当可能スタッフ + 基本シフト曜日
+    // assignOrder の昇順で取得して、自動割当のときに優先される順を担保する
+    prisma.staff.findMany({
+      where: { storeId: store.id, isActive: true, isAssignable: true },
+      orderBy: [{ assignOrder: 'asc' }, { id: 'asc' }],
+      select: { id: true, baseShiftDays: true },
     }),
     prisma.reservation.findMany({
       where: {
@@ -125,7 +120,7 @@ export default defineEventHandler(async (event) => {
         status: 'CONFIRMED',
         startAt: { gte: new Date(`${ymd}T00:00:00+09:00`), lt: new Date(new Date(`${ymd}T00:00:00+09:00`).getTime() + 86_400_000) },
       },
-      select: { bedId: true, practitionerId: true, startAt: true, endAt: true },
+      select: { bedId: true, staffId: true, startAt: true, endAt: true },
     }),
   ])
 
@@ -164,13 +159,13 @@ export default defineEventHandler(async (event) => {
 
   // 空きベッド検索
   const usedBeds = new Set<number>()
-  const usedPractitioners = new Set<number>()
+  const usedStaffs = new Set<number>()
   for (const r of reservations) {
     const rStart = new Date(r.startAt).getTime()
     const rEnd = new Date(r.endAt).getTime()
     if (rStart < endAt.getTime() && rEnd > startAt.getTime()) {
       usedBeds.add(r.bedId)
-      usedPractitioners.add(r.practitionerId)
+      usedStaffs.add(r.staffId)
     }
   }
   const availableBed = beds.find(b => !usedBeds.has(b.id))
@@ -178,19 +173,13 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 409, statusMessage: '空きベッドがありません' })
   }
 
-  // 空きスタッフ検索（シフトが収まっており、他予約と被らない）
-  const shiftMap = new Map<number, { startMin: number, endMin: number }>()
-  for (const s of shifts) {
-    shiftMap.set(s.practitionerId, { startMin: parseHm(s.startTime), endMin: parseHm(s.endTime) })
-  }
-  const availablePractitioner = practitioners.find((p) => {
-    if (usedPractitioners.has(p.id)) return false
-    const sh = shiftMap.get(p.id)
-    if (!sh) return false
-    // 開始時刻に出勤していれば担当可(施術がシフト終了をはみ出しても最後まで対応する想定。availability と揃える)
-    return sh.startMin <= startMin && startMin <= sh.endMin
+  // 空きスタッフ検索（基本シフト曜日に出勤予定で、他予約と被らない）
+  // 出勤時間帯は店舗の営業時間に従う(availability と揃える)
+  const availableStaff = staffs.find((st) => {
+    if (usedStaffs.has(st.id)) return false
+    return st.baseShiftDays.includes(effectiveDow)
   })
-  if (!availablePractitioner) {
+  if (!availableStaff) {
     throw createError({ statusCode: 409, statusMessage: '空いている施術者がいません' })
   }
 
@@ -277,7 +266,7 @@ export default defineEventHandler(async (event) => {
         data: {
           storeId: store!.id,
           bedId: availableBed!.id,
-          practitionerId: availablePractitioner!.id,
+          staffId: availableStaff!.id,
           menuId: menu!.id,
           customerId: customerRow!.id,
           startAt,

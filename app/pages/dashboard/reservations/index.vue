@@ -16,7 +16,7 @@ type Reservation = {
   note: string | null
   store: { id: number, name: string }
   bed: { id: number, name: string }
-  practitioner: { id: number, name: string }
+  staff: { id: number, name: string }
   menu: { id: number, name: string, durationMinutes: number, priceJpy: number }
   customer: { id: number, name: string | null, phone: string | null, email: string | null }
 }
@@ -540,7 +540,7 @@ function goToday() { scheduleDate.value = todayYmd() }
               <span class="text-xs text-slate-500">({{ r.menu.durationMinutes }}分)</span>
             </td>
             <td class="px-3 py-2 border-b border-[#dcdcde] text-xs">
-              {{ r.practitioner.name }}<br>
+              {{ r.staff.name }}<br>
               <span class="text-slate-500">{{ r.bed.name }}</span>
             </td>
             <td class="px-3 py-2 border-b border-[#dcdcde]">

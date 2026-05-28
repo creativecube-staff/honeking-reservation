@@ -19,7 +19,7 @@ const patchSchema = z.object({
   // リスケジュール用フィールド
   startAt: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{4}$/, 'startAt は YYYY-MM-DDTHHMM').optional(),
   menuId: z.number().int().positive().optional(),
-  practitionerId: z.number().int().positive().optional(),
+  staffId: z.number().int().positive().optional(),
   bedId: z.number().int().positive().optional(),
   // true ならスタッフ・ベッドを自動再割当（手動指定があれば手動を優先）
   autoAssign: z.boolean().optional(),
@@ -59,16 +59,16 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, statusMessage: '予約が見つかりません' })
   }
 
-  const { status, note, startAt: startAtStr, menuId: newMenuIdReq, practitionerId: practIdReq, bedId: bedIdReq, autoAssign, forceOverride, historyNote } = parsed.data
+  const { status, note, startAt: startAtStr, menuId: newMenuIdReq, staffId: staffIdReq, bedId: bedIdReq, autoAssign, forceOverride, historyNote } = parsed.data
 
   // ─── リスケジュール（日時 or メニュー or スタッフ or ベッドの変更）が含まれるか
-  const isReschedule = typeof startAtStr === 'string' || typeof newMenuIdReq === 'number' || typeof practIdReq === 'number' || typeof bedIdReq === 'number' || autoAssign === true
+  const isReschedule = typeof startAtStr === 'string' || typeof newMenuIdReq === 'number' || typeof staffIdReq === 'number' || typeof bedIdReq === 'number' || autoAssign === true
 
   // 最終的な確定値
   let finalStartAt: Date = existing.startAt
   let finalEndAt: Date = existing.endAt
   let finalMenuId: number = existing.menuId
-  let finalPractitionerId: number = existing.practitionerId
+  let finalStaffId: number = existing.staffId
   let finalBedId: number = existing.bedId
 
   if (isReschedule) {
@@ -112,22 +112,16 @@ export default defineEventHandler(async (event) => {
     const dayStart = new Date(`${ymd}T00:00:00+09:00`)
     const dayEnd = new Date(dayStart.getTime() + 86_400_000)
 
-    const [businessHours, holidays, closures, publicHoliday, beds, practitioners, shifts, reservations] = await Promise.all([
+    const [businessHours, holidays, closures, publicHoliday, beds, staffs, reservations] = await Promise.all([
       prisma.businessHour.findMany({ where: { storeId: existing.storeId } }),
       prisma.holiday.findMany({ where: { storeId: existing.storeId, date: dateDb } }),
       prisma.closure.findMany({ where: { storeId: existing.storeId, date: dateDb } }),
       prisma.publicHoliday.findUnique({ where: { date: dateDb } }),
       prisma.bed.findMany({ where: { storeId: existing.storeId, isActive: true }, select: { id: true } }),
-      prisma.practitioner.findMany({ where: { isActive: true, isAssignable: true }, select: { id: true, storeId: true } }),
-      prisma.shift.findMany({
-        where: {
-          date: dateDb,
-          OR: [
-            { workStoreId: existing.storeId },
-            { workStoreId: null, practitioner: { storeId: existing.storeId } },
-          ],
-        },
-        select: { practitionerId: true, startTime: true, endTime: true },
+      prisma.staff.findMany({
+        where: { storeId: existing.storeId, isActive: true, isAssignable: true },
+        orderBy: [{ assignOrder: 'asc' }, { id: 'asc' }],
+        select: { id: true, baseShiftDays: true },
       }),
       prisma.reservation.findMany({
         where: {
@@ -136,7 +130,7 @@ export default defineEventHandler(async (event) => {
           startAt: { gte: dayStart, lt: dayEnd },
           NOT: { id }, // 自身を除外
         },
-        select: { bedId: true, practitionerId: true, startAt: true, endAt: true },
+        select: { bedId: true, staffId: true, startAt: true, endAt: true },
       }),
     ])
 
@@ -159,13 +153,13 @@ export default defineEventHandler(async (event) => {
 
     // ④ ベッド・スタッフの使用状況計算（自身は除外済み）
     const usedBeds = new Set<number>()
-    const usedPractitioners = new Set<number>()
+    const usedStaffs = new Set<number>()
     for (const r of reservations) {
       const rs = new Date(r.startAt).getTime()
       const re = new Date(r.endAt).getTime()
       if (rs < endAt.getTime() && re > startAt.getTime()) {
         usedBeds.add(r.bedId)
-        usedPractitioners.add(r.practitionerId)
+        usedStaffs.add(r.staffId)
       }
     }
 
@@ -192,46 +186,40 @@ export default defineEventHandler(async (event) => {
       }
     }
 
-    // ⑥ スタッフ確定
-    const shiftMap = new Map<number, { startMin: number, endMin: number }>()
-    for (const s of shifts) shiftMap.set(s.practitionerId, { startMin: parseHm(s.startTime), endMin: parseHm(s.endTime) })
+    // ⑥ スタッフ確定（基本シフト曜日に出勤するスタッフから選ぶ）
+    const effectiveDow = publicHoliday ? 0 : dateDb.getUTCDay()
 
-    let practitionerId: number
-    if (practIdReq) {
-      const p = practitioners.find(x => x.id === practIdReq)
-      if (!p) throw createError({ statusCode: 400, statusMessage: '指定の施術者が見つかりません' })
-      if (usedPractitioners.has(practIdReq) && !forceOverride) {
-        throw createError({ statusCode: 409, statusMessage: '指定の施術者はその時間帯すでに予約に入っています' })
+    let staffId: number
+    if (staffIdReq) {
+      const st = staffs.find(x => x.id === staffIdReq)
+      if (!st) throw createError({ statusCode: 400, statusMessage: '指定のスタッフが見つかりません' })
+      if (usedStaffs.has(staffIdReq) && !forceOverride) {
+        throw createError({ statusCode: 409, statusMessage: '指定のスタッフはその時間帯すでに予約に入っています' })
       }
-      if (!forceOverride) {
-        const sh = shiftMap.get(practIdReq)
-        if (!sh || sh.startMin > startMin || sh.endMin < endMin) {
-          throw createError({ statusCode: 409, statusMessage: '指定の施術者はその時間シフトに入っていません' })
-        }
+      if (!forceOverride && !st.baseShiftDays.includes(effectiveDow)) {
+        throw createError({ statusCode: 409, statusMessage: '指定のスタッフはこの曜日は出勤予定がありません' })
       }
-      practitionerId = practIdReq
+      staffId = staffIdReq
     }
     else if (autoAssign) {
-      const free = practitioners.find((p) => {
-        if (usedPractitioners.has(p.id)) return false
-        const sh = shiftMap.get(p.id)
-        if (!sh) return false
-        return sh.startMin <= startMin && endMin <= sh.endMin
+      const free = staffs.find((st) => {
+        if (usedStaffs.has(st.id)) return false
+        return st.baseShiftDays.includes(effectiveDow)
       })
-      if (!free) throw createError({ statusCode: 409, statusMessage: '空いている施術者がいません' })
-      practitionerId = free.id
+      if (!free) throw createError({ statusCode: 409, statusMessage: '空いているスタッフがいません' })
+      staffId = free.id
     }
     else {
-      practitionerId = existing.practitionerId
-      if (usedPractitioners.has(practitionerId) && !forceOverride) {
-        throw createError({ statusCode: 409, statusMessage: '元の施術者はその時間帯すでに別の予約に入っています。別の施術者を指定するか「自動で再割当」を選んでください' })
+      staffId = existing.staffId
+      if (usedStaffs.has(staffId) && !forceOverride) {
+        throw createError({ statusCode: 409, statusMessage: '元のスタッフはその時間帯すでに別の予約に入っています。別のスタッフを指定するか「自動で再割当」を選んでください' })
       }
     }
 
     finalStartAt = startAt
     finalEndAt = endAt
     finalMenuId = menu.id
-    finalPractitionerId = practitionerId
+    finalStaffId = staffId
     finalBedId = bedId
   }
 
@@ -250,7 +238,7 @@ export default defineEventHandler(async (event) => {
     || finalEndAt.getTime() !== existing.endAt.getTime()
     || finalStatus !== existing.status
     || finalMenuId !== existing.menuId
-    || finalPractitionerId !== existing.practitionerId
+    || finalStaffId !== existing.staffId
     || finalBedId !== existing.bedId
     || (typeof note !== 'undefined' && note !== existing.note)
 
@@ -264,7 +252,7 @@ export default defineEventHandler(async (event) => {
     || finalEndAt.getTime() !== existing.endAt.getTime()
     || finalStatus !== existing.status
     || finalMenuId !== existing.menuId
-    || finalPractitionerId !== existing.practitionerId
+    || finalStaffId !== existing.staffId
     || finalBedId !== existing.bedId
 
   try {
@@ -276,7 +264,7 @@ export default defineEventHandler(async (event) => {
           endAt: finalEndAt,
           status: finalStatus,
           menuId: finalMenuId,
-          practitionerId: finalPractitionerId,
+          staffId: finalStaffId,
           bedId: finalBedId,
           note: typeof note !== 'undefined' ? note : existing.note,
           cancelledAt,
@@ -287,19 +275,19 @@ export default defineEventHandler(async (event) => {
         await tx.reservationHistory.create({
           data: {
             reservationId: id,
-            changedByPractitionerId: currentUser.id,
+            changedByLoginId: currentUser.id,
             changedByName: currentUser.displayName,
             prevStartAt: existing.startAt,
             prevEndAt: existing.endAt,
             prevStatus: existing.status,
             prevMenuId: existing.menuId,
-            prevPractitionerId: existing.practitionerId,
+            prevStaffId: existing.staffId,
             prevBedId: existing.bedId,
             newStartAt: updated.startAt,
             newEndAt: updated.endAt,
             newStatus: updated.status,
             newMenuId: updated.menuId,
-            newPractitionerId: updated.practitionerId,
+            newStaffId: updated.staffId,
             newBedId: updated.bedId,
             note: historyNote || null,
           },

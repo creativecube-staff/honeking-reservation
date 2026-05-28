@@ -55,7 +55,6 @@ const storeNavItems: ReadonlyArray<NavItem> = [
   // ダッシュボードはロゴクリックで戻れるため、タブには出さない
   { icon: 'i-lucide-calendar-check', label: '予約・販売', to: '/dashboard/reservations', permission: 'reservation:view' },
   { icon: 'i-lucide-users', label: '顧客', to: '/dashboard/customers', permission: 'customer:view' },
-  { icon: 'i-lucide-calendar-clock', label: 'シフト', to: '/dashboard/shifts', permission: 'shift:view' },
   // 店舗モードの「店舗管理」は自店の店休日のみ（store/index.vue がコンテキストで出し分け）
   { icon: 'i-lucide-building-2', label: '店舗管理', to: '/dashboard/stores', permission: 'store:view' },
   { icon: 'i-lucide-user-round', label: 'スタッフ', to: '/dashboard/staff', permission: 'staff:view' },

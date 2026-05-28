@@ -175,12 +175,10 @@ function scopeLabel(a: Account): string {
 
 <template>
   <div>
-    <h1 class="text-2xl font-semibold text-slate-900 mb-1">
-      ログイン管理
-    </h1>
-    <p class="text-sm text-slate-600 mb-4">
-      管理画面にログインできるアカウントと、ログイン履歴を管理します。パスワードは自動生成され、発行時に 1 回だけ表示されます。
-    </p>
+    <AdminDetailHeader
+      title="ログイン管理"
+      description="管理画面にログインできるアカウントと、ログイン履歴を管理します。"
+    />
 
     <UAlert
       v-if="accountsError"
@@ -204,32 +202,36 @@ function scopeLabel(a: Account): string {
       </button>
     </div>
 
-    <div class="bg-white border border-[#c3c4c7] rounded-sm shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-x-auto mb-8">
-      <table class="w-full text-sm">
-        <thead class="bg-[#f6f7f7] text-slate-900">
-          <tr>
-            <th class="px-3 py-2.5 text-left font-semibold border-b border-[#c3c4c7]">
+    <div class="admin-table-wrap bg-white border border-[#c3c4c7] rounded-sm shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-x-auto mb-8">
+      <table
+        class="admin-table w-full text-sm
+          [&_th]:[border-right:1px_dotted_#c3c4c7] [&_td]:[border-right:1px_dotted_#c3c4c7]
+          [&_th:last-child]:[border-right:none] [&_td:last-child]:[border-right:none]"
+      >
+        <thead class="admin-table-head bg-[#f6f7f7] text-slate-900">
+          <tr class="admin-table-head-row">
+            <th class="px-3 py-2.5 text-left font-semibold border-b border-[#c3c4c7] whitespace-nowrap">
               名前
             </th>
-            <th class="px-3 py-2.5 text-left font-semibold border-b border-[#c3c4c7]">
+            <th class="px-3 py-2.5 text-left font-semibold border-b border-[#c3c4c7] whitespace-nowrap">
               ログイン ID
             </th>
-            <th class="px-3 py-2.5 text-left font-semibold border-b border-[#c3c4c7]">
+            <th class="px-3 py-2.5 text-left font-semibold border-b border-[#c3c4c7] whitespace-nowrap">
               区分 / 範囲
             </th>
-            <th class="px-3 py-2.5 text-left font-semibold border-b border-[#c3c4c7]">
+            <th class="px-3 py-2.5 text-left font-semibold border-b border-[#c3c4c7] whitespace-nowrap">
               最終ログイン
             </th>
-            <th class="px-3 py-2.5 text-left font-semibold border-b border-[#c3c4c7]">
+            <th class="px-3 py-2.5 text-left font-semibold border-b border-[#c3c4c7] whitespace-nowrap">
               状態
             </th>
-            <th class="px-3 py-2.5 text-right font-semibold border-b border-[#c3c4c7]">
+            <th class="px-3 py-2.5 text-right font-semibold border-b border-[#c3c4c7] whitespace-nowrap">
               操作
             </th>
           </tr>
         </thead>
-        <tbody>
-          <tr v-if="(accounts ?? []).length === 0">
+        <tbody class="admin-table-body">
+          <tr v-if="(accounts ?? []).length === 0" class="admin-table-empty">
             <td colspan="6" class="px-3 py-6 text-center text-slate-500">
               ログインできるアカウントがありません。
             </td>
@@ -237,7 +239,7 @@ function scopeLabel(a: Account): string {
           <tr
             v-for="a in accounts ?? []"
             :key="a.id"
-            class="border-b border-[#f0f0f1] last:border-b-0 hover:bg-[#f6f7f7]"
+            class="admin-table-row group border-b border-[#f0f0f1] last:border-b-0 hover:bg-[#f6f7f7]"
           >
             <td class="px-3 py-2.5 align-top font-semibold text-slate-900">
               {{ a.name }}
@@ -339,29 +341,33 @@ function scopeLabel(a: Account): string {
       </select>
     </div>
 
-    <div class="bg-white border border-[#c3c4c7] rounded-sm shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-x-auto">
-      <table class="w-full text-sm">
-        <thead class="bg-[#f6f7f7] text-slate-900">
-          <tr>
-            <th class="px-3 py-2.5 text-left font-semibold border-b border-[#c3c4c7]">
+    <div class="admin-table-wrap bg-white border border-[#c3c4c7] rounded-sm shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-x-auto">
+      <table
+        class="admin-table w-full text-sm
+          [&_th]:[border-right:1px_dotted_#c3c4c7] [&_td]:[border-right:1px_dotted_#c3c4c7]
+          [&_th:last-child]:[border-right:none] [&_td:last-child]:[border-right:none]"
+      >
+        <thead class="admin-table-head bg-[#f6f7f7] text-slate-900">
+          <tr class="admin-table-head-row">
+            <th class="px-3 py-2.5 text-left font-semibold border-b border-[#c3c4c7] whitespace-nowrap">
               日時
             </th>
-            <th class="px-3 py-2.5 text-left font-semibold border-b border-[#c3c4c7]">
+            <th class="px-3 py-2.5 text-left font-semibold border-b border-[#c3c4c7] whitespace-nowrap">
               アカウント / 試行 ID
             </th>
-            <th class="px-3 py-2.5 text-left font-semibold border-b border-[#c3c4c7]">
+            <th class="px-3 py-2.5 text-left font-semibold border-b border-[#c3c4c7] whitespace-nowrap">
               結果
             </th>
-            <th class="px-3 py-2.5 text-left font-semibold border-b border-[#c3c4c7]">
+            <th class="px-3 py-2.5 text-left font-semibold border-b border-[#c3c4c7] whitespace-nowrap">
               IP
             </th>
-            <th class="px-3 py-2.5 text-left font-semibold border-b border-[#c3c4c7]">
+            <th class="px-3 py-2.5 text-left font-semibold border-b border-[#c3c4c7] whitespace-nowrap">
               端末 (User-Agent)
             </th>
           </tr>
         </thead>
-        <tbody>
-          <tr v-if="(history ?? []).length === 0">
+        <tbody class="admin-table-body">
+          <tr v-if="(history ?? []).length === 0" class="admin-table-empty">
             <td colspan="5" class="px-3 py-6 text-center text-slate-500">
               ログイン履歴はまだありません。
             </td>
@@ -369,7 +375,7 @@ function scopeLabel(a: Account): string {
           <tr
             v-for="h in history ?? []"
             :key="h.id"
-            class="border-b border-[#f0f0f1] last:border-b-0 hover:bg-[#f6f7f7]"
+            class="admin-table-row border-b border-[#f0f0f1] last:border-b-0 hover:bg-[#f6f7f7]"
           >
             <td class="px-3 py-2.5 align-top text-slate-700 tabular-nums whitespace-nowrap">
               {{ fmtDateTime(h.createdAt) }}

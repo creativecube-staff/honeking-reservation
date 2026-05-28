@@ -17,20 +17,17 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: '不正な ID です' })
   }
 
-  const target = await prisma.practitioner.findUnique({
+  const target = await prisma.login.findUnique({
     where: { id },
-    select: { id: true, canLogin: true, username: true },
+    select: { id: true, username: true },
   })
   if (!target) {
     throw createError({ statusCode: 404, statusMessage: 'アカウントが見つかりません' })
   }
-  if (!target.canLogin) {
-    throw createError({ statusCode: 400, statusMessage: 'このアカウントはログイン許可されていません' })
-  }
 
   const password = generatePassword()
   const passwordHash = await bcrypt.hash(password, 10)
-  await prisma.practitioner.update({
+  await prisma.login.update({
     where: { id },
     data: { passwordHash, passwordEnc: encryptUtf8(password) },
     select: { id: true },

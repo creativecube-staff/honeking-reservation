@@ -50,7 +50,7 @@ export default defineEventHandler(async (event) => {
       product: { select: { id: true, name: true, kind: true, voucherTotalUses: true } },
       store: { select: { id: true, name: true } },
       customer: { select: { id: true, name: true } },
-      soldByPractitioner: { select: { id: true, name: true } },
+      soldByLogin: { select: { id: true, displayName: true } },
       reservation: { select: { id: true, confirmationCode: true } },
       voucher: { select: { id: true, totalUses: true, remainingUses: true } },
     },
@@ -62,8 +62,13 @@ export default defineEventHandler(async (event) => {
     catch { return null }
   }
 
-  return sales.map(s => ({
-    ...s,
-    customer: { id: s.customer.id, name: safeDecrypt(s.customer.name) },
-  }))
+  // UI 互換のため `soldByPractitioner: { id, name }` 形に変換（中身は Login の displayName）
+  return sales.map((s) => {
+    const { soldByLogin, ...rest } = s
+    return {
+      ...rest,
+      customer: { id: s.customer.id, name: safeDecrypt(s.customer.name) },
+      soldByPractitioner: soldByLogin ? { id: soldByLogin.id, name: soldByLogin.displayName } : null,
+    }
+  })
 })

@@ -22,7 +22,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'ログイン ID は半角英数字と _.- の 3〜32 文字にしてください' })
   }
 
-  // OWNER も Practitioner なので storeId(FK) が必要。役職 OWNER は全店アクセスなので所属は便宜上の先頭店舗にする。
+  // Login テーブルは storeId(FK) が必須。役職 OWNER は全店アクセスなので所属は便宜上の先頭店舗にする。
   const anyStore = await prisma.store.findFirst({ orderBy: { id: 'asc' }, select: { id: true } })
   if (!anyStore) {
     throw createError({ statusCode: 400, statusMessage: '先に店舗を作成してください' })
@@ -32,19 +32,16 @@ export default defineEventHandler(async (event) => {
   const passwordHash = await bcrypt.hash(password, 10)
 
   try {
-    const created = await prisma.practitioner.create({
+    const created = await prisma.login.create({
       data: {
         storeId: anyStore.id,
-        name,
-        displayOrder: 9999,
-        isActive: true,
-        isAssignable: false,
-        canLogin: true,
+        displayName: name,
         username,
         passwordHash,
         passwordEnc: encryptUtf8(password),
         role: 'OWNER',
         permissions: [],
+        isActive: true,
       },
       select: { id: true, username: true },
     })

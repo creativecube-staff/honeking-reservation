@@ -24,11 +24,12 @@ export default defineEventHandler(async (event) => {
       note: true,
       store: { select: { id: true, name: true, slug: true, phone: true, address: true, isActive: true } },
       menu: { select: { id: true, name: true, durationMinutes: true, priceJpy: true, isActive: true } },
-      practitioner: { select: { id: true, name: true } },
+      staff: { select: { id: true, name: true } },
     },
   })
 
   // displayStatus（CONFIRMED + 過去 → COMPLETED 扱い）も付与
+  // 担当者名はマイページ表示用に staffName として返す（互換維持のため practitionerName も同値で残す）
   return reservations.map(r => ({
     id: r.id,
     startAt: r.startAt.toISOString(),
@@ -39,6 +40,7 @@ export default defineEventHandler(async (event) => {
     note: r.note,
     store: r.store,
     menu: r.menu,
-    practitionerName: r.practitioner.name,
+    staffName: r.staff.name,
+    practitionerName: r.staff.name,
   }))
 })

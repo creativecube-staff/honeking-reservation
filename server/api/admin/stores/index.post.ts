@@ -29,22 +29,19 @@ export default defineEventHandler(async (event) => {
     // 店舗・ログインアカウント・初期ベッド・営業時間は不可分なのでトランザクションで同時作成
     const { store, username } = await prisma.$transaction(async (tx) => {
       const created = await tx.store.create({ data: storeData })
-      // 店舗ログインアカウント: username=店舗slug / 役職=店長(自店の全機能) / 施術割当なし。
+      // 店舗ログインアカウント（Login テーブル）: username=店舗slug / 役職=店長(自店の全機能)。
       // 非 OWNER なので、このアカウントでログインすると store-switcher は自店固定になる。
-      const account = await tx.practitioner.create({
+      const account = await tx.login.create({
         data: {
           storeId: created.id,
-          name: created.name,
-          displayOrder: 0,
-          isActive: true,
-          isAssignable: false,
-          canLogin: true,
+          displayName: created.name,
           username: created.slug,
           passwordHash,
           // OWNER がログイン管理画面で確認できるよう暗号化して併存
           passwordEnc: encryptUtf8(password),
           role: 'MANAGER',
           permissions: [],
+          isActive: true,
         },
         select: { username: true },
       })

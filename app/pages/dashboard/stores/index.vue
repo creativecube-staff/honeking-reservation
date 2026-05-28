@@ -114,14 +114,14 @@ interface PurgeCounts {
   customerVouchers: number
   voucherUsages: number
   reservationHistories: number
-  shifts: number
   menus: number
   products: number
   businessHours: number
   holidays: number
   closures: number
   beds: number
-  practitioners: number
+  staffs: number
+  logins: number
 }
 interface PurgePreview {
   store: { id: number, name: string, slug: string, isActive: boolean }
@@ -138,14 +138,14 @@ const purgeCountLabels: { key: keyof PurgeCounts, label: string }[] = [
   { key: 'voucherUsages', label: '回数券消費' },
   { key: 'customerVouchers', label: '顧客回数券' },
   { key: 'productSales', label: '販売記録' },
-  { key: 'shifts', label: 'シフト' },
   { key: 'menus', label: '店舗特別メニュー' },
   { key: 'products', label: '店舗特別商品' },
   { key: 'businessHours', label: '営業時間' },
   { key: 'holidays', label: '店休日' },
   { key: 'closures', label: '部分閉店' },
   { key: 'beds', label: 'ベッド' },
-  { key: 'practitioners', label: 'スタッフ' },
+  { key: 'staffs', label: 'スタッフ' },
+  { key: 'logins', label: 'ログインアカウント' },
 ]
 
 const purgeTarget = ref<Store | null>(null)

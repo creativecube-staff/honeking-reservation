@@ -9,8 +9,6 @@ export const ALL_PERMISSIONS = [
   'reservation:view',
   'reservation:edit',
   'reservation:cancel',
-  'shift:view',
-  'shift:edit',
   'menu:view',
   'menu:edit',
   'store:view',
@@ -45,13 +43,12 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<RoleName, Permission[]> = {
   OWNER: [...ALL_PERMISSIONS],
   // 店長: ユーザー管理含む全権限（オーナーと同等の運用）
   MANAGER: [...ALL_PERMISSIONS],
-  // 受付: 予約管理中心 + シフト閲覧 + 物販・回数券販売 + 顧客閲覧
+  // 受付: 予約管理中心 + 物販・回数券販売 + 顧客閲覧
   RECEPTIONIST: [
     'dashboard:view',
     'reservation:view',
     'reservation:edit',
     'reservation:cancel',
-    'shift:view',
     'menu:view',
     'staff:view',
     'product:view',
@@ -63,7 +60,6 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<RoleName, Permission[]> = {
   PRACTITIONER: [
     'dashboard:view',
     'reservation:view',
-    'shift:view',
     'product:view',
     'sale:view',
     'sale:edit',
@@ -88,8 +84,6 @@ export const PERMISSION_LABEL: Record<Permission, string> = {
   'reservation:view': '予約閲覧',
   'reservation:edit': '予約作成・編集',
   'reservation:cancel': '予約キャンセル',
-  'shift:view': 'シフト閲覧',
-  'shift:edit': 'シフト編集',
   'menu:view': 'メニュー閲覧',
   'menu:edit': 'メニュー編集',
   'store:view': '店舗情報閲覧',

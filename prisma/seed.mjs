@@ -14,7 +14,11 @@ const STORES = [
     phone: '04-7100-0000',
     displayOrder: 1,
     beds: 4,
-    practitioners: ['田中 健太', '佐藤 美咲'],
+    // 基本シフトは平日のみ出勤のデフォルト（0=日 ... 6=土）。土日も出る人は配列に追加する。
+    practitioners: [
+      { name: '田中 健太', gender: 'MALE', baseShiftDays: [1, 2, 3, 4, 5, 6] },
+      { name: '佐藤 美咲', gender: 'FEMALE', baseShiftDays: [1, 2, 3, 4, 5, 0] },
+    ],
   },
 ];
 
@@ -186,13 +190,13 @@ async function main() {
   await prisma.emailChangeToken.deleteMany();
   await prisma.reservation.deleteMany();
   await prisma.customer.deleteMany();
-  await prisma.shift.deleteMany();
   await prisma.publicHoliday.deleteMany();
   await prisma.closure.deleteMany();
   await prisma.holiday.deleteMany();
   await prisma.businessHour.deleteMany();
   await prisma.menu.deleteMany();
-  await prisma.practitioner.deleteMany();
+  await prisma.staff.deleteMany();
+  await prisma.login.deleteMany();
   await prisma.bed.deleteMany();
   await prisma.store.deleteMany();
 
@@ -217,8 +221,16 @@ async function main() {
     }
 
     for (let i = 0; i < s.practitioners.length; i++) {
-      await prisma.practitioner.create({
-        data: { storeId: store.id, name: s.practitioners[i], displayOrder: i + 1 },
+      const p = s.practitioners[i];
+      await prisma.staff.create({
+        data: {
+          storeId: store.id,
+          name: p.name,
+          gender: p.gender,
+          baseShiftDays: p.baseShiftDays,
+          displayOrder: i + 1,
+          assignOrder: i + 1,
+        },
       });
     }
 
@@ -264,25 +276,22 @@ async function main() {
     });
   }
 
-  console.log('👤 オーナースタッフ(ログイン可)を投入...');
-  // env 由来の管理者を OWNER として Practitioner に 1 人作成。
-  // 施術はしない想定なので isAssignable=false。env が未設定なら開発用デフォルトで作る。
+  console.log('🔑 オーナーログインを投入...');
+  // env 由来の管理者を OWNER として Login に 1 件作成。
+  // Login は管理画面ログイン専用テーブル（Staff とは完全独立）。
   const adminUsername = process.env.ADMIN_USER ?? 'admin';
   const adminPasswordHash = process.env.ADMIN_PASSWORD_HASH ?? bcrypt.hashSync('admin123', 10);
   const firstStore = await prisma.store.findFirst({ orderBy: { id: 'asc' } });
   if (firstStore) {
-    await prisma.practitioner.create({
+    await prisma.login.create({
       data: {
         storeId: firstStore.id,
-        name: 'オーナー',
-        displayOrder: 9999,
-        isActive: true,
-        isAssignable: false,
-        canLogin: true,
+        displayName: 'オーナー',
         username: adminUsername,
         passwordHash: adminPasswordHash,
         role: 'OWNER',
         permissions: [],
+        isActive: true,
       },
     });
   }
@@ -290,7 +299,8 @@ async function main() {
   const counts = {
     Store: await prisma.store.count(),
     Bed: await prisma.bed.count(),
-    Practitioner: await prisma.practitioner.count(),
+    Staff: await prisma.staff.count(),
+    Login: await prisma.login.count(),
     Menu: await prisma.menu.count(),
     BusinessHour: await prisma.businessHour.count(),
     Holiday: await prisma.holiday.count(),

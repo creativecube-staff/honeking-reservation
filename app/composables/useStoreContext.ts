@@ -45,6 +45,8 @@ export function useStoreContext() {
   function setStore(id: number | null) {
     selectedStoreId.value = id
     cookie.value = id == null ? 'all' : String(id)
+    // 店舗切替時はダッシュボードに戻す（現在表示中のページが切替後のスコープで意味を成さない可能性があるため）
+    if (import.meta.client) navigateTo('/dashboard')
   }
 
   const selectedStoreName = computed(() => {

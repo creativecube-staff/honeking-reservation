@@ -29,7 +29,8 @@ model Store {
   updatedAt    DateTime @updatedAt
 
   beds           Bed[]
-  practitioners  Practitioner[]
+  staffs         Staff[]
+  logins         Login[]
   menus          Menu[]
   businessHours  BusinessHour[]
   holidays       Holiday[]
@@ -39,9 +40,6 @@ model Store {
   productSales   ProductSale[]
   // 共通メニューのうち「この店舗では非表示にする」除外行（オプトアウト方式）
   menuExclusions MenuStoreExclusion[]
-  // ヘルプ勤務の back-relation: Shift.workStoreId が指す Shift 一覧。
-  // メイン所属（Practitioner.storeId）とは別。null の Shift はメイン店舗で勤務する想定。
-  workShifts     Shift[]              @relation("ShiftWorkStore")
 }
 
 // ベッド（店舗ごとに3〜4台）
@@ -61,42 +59,73 @@ model Bed {
   @@index([storeId])
 }
 
-// スタッフ（施術者・受付・店長・オーナーを含む店舗の所属者）
-// 「予約に割り当てられるか」と「ログインできるか」を別フラグで管理し、
-// 施術しない受付や店長もここに集約する。
+// スタッフ（店舗で働く人）。
+// Login（管理画面のログインユーザー）とは完全に独立したテーブル。同一人物が Staff と Login の
+// 両方に存在しても、リレーションでの紐付けは持たない（運用上「同じ人」と扱うだけ）。
 //
-// - isAssignable: 予約・シフトに割り当てられるか（false = 受付・経理など施術しない人）
-// - canLogin: 管理画面にログインできるか（false = 施術専門で管理画面を触らない人）
-// - canLogin = true の人は username / passwordHash / role が必須（DB CHECK で担保するのが理想だが、現状は API 層で保証）
-model Practitioner {
-  id           Int     @id @default(autoincrement())
-  storeId      Int
-  name         String
-  displayOrder Int     @default(0)
-  isActive     Boolean @default(true)
+// - isAssignable: 予約に割り当てられるか（false = 受付・経理など施術しない人）
+// - 基本シフト（baseShiftDays）はマスターの「出勤曜日」。0=日, 1=月 ... 6=土 の配列。
+//   出勤予定はこれと店舗の営業時間（BusinessHour）の組み合わせで決まる。
+// - assignOrder: 予約自動割当の優先順位（数字が小さいほど先に割り当てられる）
+// - displayOrder: 一覧表示の並び順（数字が小さいほど上に表示される）
+model Staff {
+  id            Int      @id @default(autoincrement())
+  storeId       Int
+  name          String
+  // 性別。任意（未設定 OK）。将来「女性スタッフ希望」のお客様マッチング用に持つ。
+  gender        Gender?
+  // 役職。表示用ラベル（このスタッフの呼び方）。Login.role と異なり認証・権限とは無関係なので OWNER は通常使わない。
+  role          Role?
+  // 表示順（一覧画面の並び順）
+  displayOrder  Int      @default(0)
+  // 振り分け順（予約の自動割当の優先順位）
+  assignOrder   Int      @default(0)
+  isActive      Boolean  @default(true)
   // 予約割当可否（施術者なら true、受付・経理なら false）
-  isAssignable Boolean @default(true)
+  isAssignable  Boolean  @default(true)
+  // 基本シフト（出勤曜日のセット）。0=日 ... 6=土。空配列 = 全曜日休み。
+  baseShiftDays Int[]    @default([])
 
-  // ログイン情報（canLogin=false ならすべて null/空でよい）
-  canLogin     Boolean  @default(false)
-  username     String?  @unique
-  passwordHash String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  store        Store         @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  reservations Reservation[]
+
+  @@index([storeId])
+}
+
+// スタッフの性別。将来「女性のお客様は女性スタッフを希望」などのマッチングに使うための入れ物。
+// 必須ではなく未設定（null）も許容する。
+enum Gender {
+  MALE
+  FEMALE
+}
+
+// 管理画面のログインユーザー。Staff（店舗で働く人）とは完全に独立。
+// 1 ログイン = 1 アカウントで、共有の店舗ログインや個別オーナーログインを表現する。
+// displayName はログイン画面・ヘッダーで「○○ さん」と出すための表示名（PII としては緩い）。
+model Login {
+  id           Int      @id @default(autoincrement())
+  storeId      Int
+  displayName  String
+  username     String   @unique
+  passwordHash String
   // 共有の店舗/オーナーアカウントは、OWNER がログイン管理画面でパスワードを確認できるよう
   // AES-256-GCM 暗号化して併存させる（認証は passwordHash、表示用は passwordEnc）。
   // 旧データや手入力で作られたアカウントは null（その場合は「再発行」で生成し直す）。
   passwordEnc  String?
-  role         Role?
+  role         Role
   permissions  String[] @default([])
   totpSecret   String? // Phase 5 で 2FA 有効化用
   // 最終ログイン日時（ログイン成功時に更新。ログイン管理画面の「最終ログイン」列用）
   lastLoginAt  DateTime?
+  isActive     Boolean   @default(true)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   store          Store          @relation(fields: [storeId], references: [id], onDelete: Restrict)
-  shifts         Shift[]
-  reservations   Reservation[]
   soldSales      ProductSale[]
   loginHistories LoginHistory[]
 
@@ -104,20 +133,20 @@ model Practitioner {
 }
 
 // ログイン履歴（情報漏洩・不正アクセス検知用）。成功・失敗の両方を記録する。
-// 失敗時やアカウント削除後も「誰が狙われたか」を残したいので practitionerId は nullable + SetNull。
+// 失敗時やアカウント削除後も「誰が狙われたか」を残したいので loginId は nullable + SetNull。
 // （監査ログは対象アカウント削除後も残すべきなので、例外的に SetNull。他テーブルの FK は Restrict 維持）
 model LoginHistory {
   id                Int      @id @default(autoincrement())
-  practitionerId    Int?
+  loginId           Int?
   usernameAttempted String // 試行されたユーザー名（失敗解析のため生で保存）
   success           Boolean
   ipAddress         String? // Caddy 経由のため x-forwarded-for から取得
   userAgent         String?
   createdAt         DateTime @default(now())
 
-  practitioner Practitioner? @relation(fields: [practitionerId], references: [id], onDelete: SetNull)
+  login Login? @relation(fields: [loginId], references: [id], onDelete: SetNull)
 
-  @@index([practitionerId, createdAt])
+  @@index([loginId, createdAt])
   @@index([createdAt])
 }
 
@@ -238,28 +267,6 @@ model PublicHoliday {
   updatedAt DateTime @updatedAt
 }
 
-// 施術者シフト（1施術者×1日=1行）
-// workStoreId が指定された日は、メイン店舗（Practitioner.storeId）ではなく workStore でヘルプ勤務する。
-// null の場合はメイン店舗で勤務（通常運用）。
-model Shift {
-  id             Int      @id @default(autoincrement())
-  practitionerId Int
-  date           DateTime @db.Date
-  startTime      String // "HH:MM"
-  endTime        String // "HH:MM"
-  workStoreId    Int? // null ならメイン店舗で勤務、指定があればヘルプ先店舗
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-
-  practitioner Practitioner @relation(fields: [practitionerId], references: [id], onDelete: Restrict)
-  workStore    Store?       @relation("ShiftWorkStore", fields: [workStoreId], references: [id], onDelete: Restrict)
-
-  @@unique([practitionerId, date])
-  @@index([practitionerId, date])
-  @@index([date])
-  @@index([workStoreId, date])
-}
-
 // 予約ステータス
 // 「完了」は明示的なステータスを持たず、CONFIRMED かつ終了時刻が過去という条件で
 // アプリ層が自動判定する（shared/reservationStatus.ts の displayStatus 参照）。
@@ -276,15 +283,15 @@ enum ProductKind {
   VOUCHER
 }
 
-// スタッフの役職
+// ログインアカウントの役職
 // 役職は「呼び方」と「初期権限テンプレート」の役目。
-// 実際の権限制御は Practitioner.permissions（個別上書き）と shared/permissions.ts の
+// 実際の権限制御は Login.permissions（個別上書き）と shared/permissions.ts の
 // ROLE_DEFAULT_PERMISSIONS を合成して判定する。
 enum Role {
   OWNER // オーナー（経営者）: 全権限
   MANAGER // 店長: ほぼ全権限（スタッフ管理含む）
   RECEPTIONIST // 受付: 予約管理中心
-  PRACTITIONER // 施術者: 自分のシフト・予約閲覧中心
+  PRACTITIONER // 施術者: 自分の予約閲覧中心
 }
 
 // 顧客（個人情報は AES-256-GCM で暗号化された値を保存。検索は *Hash カラムで行う）
@@ -391,12 +398,12 @@ model EmailChangeToken {
   @@index([newEmailHash])
 }
 
-// 予約（1ベッド + 1施術者 + 1メニュー + 時間帯）
+// 予約（1ベッド + 1スタッフ + 1メニュー + 時間帯）
 model Reservation {
   id               Int               @id @default(autoincrement())
   storeId          Int
   bedId            Int
-  practitionerId   Int
+  staffId          Int
   menuId           Int
   customerId       Int
   startAt          DateTime
@@ -410,7 +417,7 @@ model Reservation {
 
   store        Store                @relation(fields: [storeId], references: [id], onDelete: Restrict)
   bed          Bed                  @relation(fields: [bedId], references: [id], onDelete: Restrict)
-  practitioner Practitioner         @relation(fields: [practitionerId], references: [id], onDelete: Restrict)
+  staff        Staff                @relation(fields: [staffId], references: [id], onDelete: Restrict)
   menu         Menu                 @relation(fields: [menuId], references: [id], onDelete: Restrict)
   customer     Customer             @relation(fields: [customerId], references: [id], onDelete: Restrict)
   histories    ReservationHistory[]
@@ -419,37 +426,38 @@ model Reservation {
   voucherUsage VoucherUsage?
 
   @@index([storeId, startAt])
-  @@index([practitionerId, startAt])
+  @@index([staffId, startAt])
   @@index([bedId, startAt])
   @@index([customerId])
   @@index([startAt])
 }
 
 // 予約の変更履歴（時間変更・メニュー変更・スタッフ/ベッド変更・ステータス変更を 1 行ずつ記録）
-// changedByPractitionerId は操作した管理ユーザー（Practitioner）。削除時の影響を避けるため nullable。
+// changedByLoginId は操作した管理ユーザー（Login）の id。FK は持たない（Login が削除されても履歴は残す）。
 // changedByName は操作時点での名前を別途保存し、後で名前を変えても履歴の表示が壊れないようにする。
+// prevStaffId / newStaffId は当時の Staff.id。Staff が削除されても履歴自体は残るが、表示は古い名前のみ。
 model ReservationHistory {
-  id                      Int      @id @default(autoincrement())
-  reservationId           Int
-  changedAt               DateTime @default(now())
-  changedByPractitionerId Int?
-  changedByName           String
+  id              Int      @id @default(autoincrement())
+  reservationId   Int
+  changedAt       DateTime @default(now())
+  changedByLoginId Int?
+  changedByName   String
 
   // 変更前のスナップショット
-  prevStartAt        DateTime
-  prevEndAt          DateTime
-  prevStatus         ReservationStatus
-  prevMenuId         Int
-  prevPractitionerId Int
-  prevBedId          Int
+  prevStartAt DateTime
+  prevEndAt   DateTime
+  prevStatus  ReservationStatus
+  prevMenuId  Int
+  prevStaffId Int
+  prevBedId   Int
 
   // 変更後のスナップショット
-  newStartAt        DateTime
-  newEndAt          DateTime
-  newStatus         ReservationStatus
-  newMenuId         Int
-  newPractitionerId Int
-  newBedId          Int
+  newStartAt DateTime
+  newEndAt   DateTime
+  newStatus  ReservationStatus
+  newMenuId  Int
+  newStaffId Int
+  newBedId   Int
 
   note String?
 
@@ -492,27 +500,28 @@ model Product {
 // 販売記録（物販 + 回数券販売の両方）
 // unitPriceJpyAtSale は販売時点での単価スナップショット。後で priceJpy を変えても履歴は残る。
 // reservationId は紐付け任意。「来店ついでに購入」のときは設定する。
+// soldByLoginId は販売登録した管理ユーザー（Login）。
 model ProductSale {
-  id                   Int      @id @default(autoincrement())
-  productId            Int
-  storeId              Int
-  customerId           Int
-  reservationId        Int?
-  quantity             Int
-  unitPriceJpyAtSale   Int
-  soldAt               DateTime @default(now())
-  soldByPractitionerId Int?
-  note                 String?
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  id                 Int      @id @default(autoincrement())
+  productId          Int
+  storeId            Int
+  customerId         Int
+  reservationId      Int?
+  quantity           Int
+  unitPriceJpyAtSale Int
+  soldAt             DateTime @default(now())
+  soldByLoginId      Int?
+  note               String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
-  product            Product          @relation(fields: [productId], references: [id], onDelete: Restrict)
-  store              Store            @relation(fields: [storeId], references: [id], onDelete: Restrict)
-  customer           Customer         @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  reservation        Reservation?     @relation(fields: [reservationId], references: [id], onDelete: Restrict)
-  soldByPractitioner Practitioner?    @relation(fields: [soldByPractitionerId], references: [id], onDelete: Restrict)
+  product     Product          @relation(fields: [productId], references: [id], onDelete: Restrict)
+  store       Store            @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  customer    Customer         @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  reservation Reservation?     @relation(fields: [reservationId], references: [id], onDelete: Restrict)
+  soldByLogin Login?           @relation(fields: [soldByLoginId], references: [id], onDelete: Restrict)
   // 回数券販売（kind=VOUCHER）のときに 1 対 1 で発行される
-  voucher            CustomerVoucher?
+  voucher     CustomerVoucher?
 
   @@index([storeId, soldAt])
   @@index([customerId])

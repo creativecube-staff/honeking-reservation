@@ -12,7 +12,7 @@ type Menu = {
   priceJpy: number
   isActive: boolean
 }
-type Practitioner = { id: number, name: string, storeId: number }
+type Staff = { id: number, name: string, storeId: number }
 type Bed = { id: number, name: string }
 
 // マスタ取得
@@ -30,7 +30,7 @@ const form = reactive({
   date: todayYmd(),
   time: '10:00',
   menuId: null as number | null,
-  practitionerId: null as number | null, // null = 自動割当
+  staffId: null as number | null, // null = 自動割当
   bedId: null as number | null, // null = 自動割当
   customerName: '',
   customerPhone: '',
@@ -48,13 +48,13 @@ const visibleMenus = computed(() => {
   return (menus.value ?? []).filter(m => m.isActive && (m.storeId === null || m.storeId === form.storeId))
 })
 
-// 予約に割り当てられるスタッフのみ（オーナー等の特別アカウントは除外）
-const { data: practitioners } = await useFetch<Practitioner[]>('/api/admin/staff', {
+// 予約に割り当てられるスタッフのみ
+const { data: staffs } = await useFetch<Staff[]>('/api/admin/staff', {
   query: { status: 'active', assignable: 'true' },
 })
-const visiblePractitioners = computed(() => {
+const visibleStaffs = computed(() => {
   if (!form.storeId) return []
-  return (practitioners.value ?? []).filter(p => p.storeId === form.storeId)
+  return (staffs.value ?? []).filter(s => s.storeId === form.storeId)
 })
 
 // ベッドは店舗ごとに別 API
@@ -68,7 +68,7 @@ watch(() => form.storeId, (v) => {
   if (v) loadBeds(v).catch(() => {})
   // 店舗が変わったら依存項目をリセット
   form.menuId = null
-  form.practitionerId = null
+  form.staffId = null
   form.bedId = null
 })
 const visibleBeds = computed(() => form.storeId ? (bedsCache.value[form.storeId] ?? []) : [])
@@ -112,7 +112,7 @@ async function onSubmit() {
       body: {
         storeId: form.storeId,
         menuId: form.menuId,
-        practitionerId: form.practitionerId ?? undefined,
+        staffId: form.staffId ?? undefined,
         bedId: form.bedId ?? undefined,
         startAt: sa,
         customer: {
@@ -243,13 +243,13 @@ const timeOptions = computed(() => {
                 <span class="text-xs font-normal text-slate-500">（空欄=自動）</span>
               </label>
               <select
-                v-model="form.practitionerId"
+                v-model="form.staffId"
                 :disabled="!form.storeId"
                 class="w-full px-2 py-2 text-sm border border-[#8c8f94] rounded-sm bg-white focus:outline-none focus:border-orange-500 disabled:bg-slate-100"
               >
                 <option :value="null">自動割当</option>
-                <option v-for="p in visiblePractitioners" :key="p.id" :value="p.id">
-                  {{ p.name }}
+                <option v-for="s in visibleStaffs" :key="s.id" :value="s.id">
+                  {{ s.name }}
                 </option>
               </select>
             </div>

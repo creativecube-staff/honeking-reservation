@@ -42,7 +42,7 @@ export default defineEventHandler(async (event) => {
   const [storesActive, beds, staff, menus, holidaysFuture, todayReservations, weekReservations, upcomingConfirmed, storesList, monthMenuRevenueRows, monthSaleRevenueRows, todayMenuRevenueRows, todaySaleRevenueRows] = await Promise.all([
     prisma.store.count({ where: storeListWhere }),
     prisma.bed.count({ where: { isActive: true, ...storeWhere } }),
-    prisma.practitioner.count({ where: { isActive: true, isAssignable: true, ...storeWhere } }),
+    prisma.staff.count({ where: { isActive: true, isAssignable: true, ...storeWhere } }),
     prisma.menu.count({ where: menuWhere }),
     prisma.holiday.count({ where: { date: { gte: todayStart }, ...storeWhere } }),
     prisma.reservation.count({

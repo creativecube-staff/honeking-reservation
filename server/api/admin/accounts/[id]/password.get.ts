@@ -15,11 +15,11 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: '不正な ID です' })
   }
 
-  const target = await prisma.practitioner.findUnique({
+  const target = await prisma.login.findUnique({
     where: { id },
-    select: { username: true, passwordEnc: true, canLogin: true },
+    select: { username: true, passwordEnc: true },
   })
-  if (!target || !target.canLogin) {
+  if (!target) {
     throw createError({ statusCode: 404, statusMessage: 'アカウントが見つかりません' })
   }
   // 旧データや手入力で作られたアカウントは暗号化パスワードを持たない（復元不可）

@@ -14,7 +14,7 @@ export default defineEventHandler(async (event) => {
     include: {
       store: { select: { id: true, name: true, address: true, phone: true } },
       bed: { select: { id: true, name: true } },
-      practitioner: { select: { id: true, name: true, storeId: true } },
+      staff: { select: { id: true, name: true, storeId: true } },
       menu: { select: { id: true, name: true, durationMinutes: true, priceJpy: true } },
       customer: { select: { id: true, name: true, phone: true, email: true } },
       // 変更履歴（新しい順）

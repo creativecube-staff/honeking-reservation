@@ -15,7 +15,7 @@ type Reservation = {
   endAt: string
   store: { id: number, name: string }
   bed: { id: number, name: string }
-  practitioner: { id: number, name: string }
+  staff: { id: number, name: string }
   menu: { id: number, name: string, durationMinutes: number }
   customer: { id: number, name: string | null, phone: string | null, email: string | null }
 }
@@ -114,7 +114,7 @@ function gotoDetail(id: number) {
                 <span class="text-xs text-slate-500 ml-1">{{ r.menu.name }}</span>
               </div>
               <div class="text-xs text-slate-500 truncate">
-                担当: {{ r.practitioner.name }} / {{ r.bed.name }}
+                担当: {{ r.staff.name }} / {{ r.bed.name }}
                 <template v-if="r.customer.phone"> · 📞 {{ r.customer.phone }}</template>
               </div>
             </div>

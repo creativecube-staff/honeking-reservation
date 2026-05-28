@@ -16,8 +16,9 @@ import { prisma } from '../utils/prisma'
 //        中休み前のレンジは従来どおり施術が休憩前に終わる枠のみ
 //      - スロット範囲が Closure と重ならない
 //      - 空きベッドが 1 つ以上存在
-//      - その店舗で勤務するスタッフのうち、開始時刻にシフトに入っており(施術がシフト終了をはみ出しても可)、
+//      - その店舗のスタッフのうち、対象日の曜日が baseShiftDays に含まれる(=出勤予定)スタッフで、
 //        その時間に他の予約が無いスタッフが 1 名以上存在
+//        出勤時間帯は店舗の営業時間レンジを採用。最終レンジは「最終受付」扱いで開始が閉店までOK
 
 function pad(n: number): string {
   return String(n).padStart(2, '0')
@@ -112,24 +113,16 @@ export default defineEventHandler(async (event) => {
   }
 
   // 期間内の関連データをまとめて取得
-  const [businessHours, holidays, closures, publicHolidays, beds, practitioners, shifts, reservations] = await Promise.all([
+  const [businessHours, holidays, closures, publicHolidays, beds, staffs, reservations] = await Promise.all([
     prisma.businessHour.findMany({ where: { storeId: store.id } }),
     prisma.holiday.findMany({ where: { storeId: store.id, date: { gte: fromDate, lte: toDate } } }),
     prisma.closure.findMany({ where: { storeId: store.id, date: { gte: fromDate, lte: toDate } } }),
     prisma.publicHoliday.findMany({ where: { date: { gte: fromDate, lte: toDate } } }),
     prisma.bed.findMany({ where: { storeId: store.id, isActive: true }, select: { id: true } }),
-    // 予約に割り当て可能なスタッフのみ（オーナー等の特別アカウントは除外）
-    prisma.practitioner.findMany({ where: { isActive: true, isAssignable: true }, select: { id: true, storeId: true } }),
-    // この店舗で勤務するシフト = workStoreId が当店 OR (workStoreId IS NULL AND practitioner.storeId = 当店)
-    prisma.shift.findMany({
-      where: {
-        date: { gte: fromDate, lte: toDate },
-        OR: [
-          { workStoreId: store.id },
-          { workStoreId: null, practitioner: { storeId: store.id } },
-        ],
-      },
-      select: { practitionerId: true, date: true, startTime: true, endTime: true, workStoreId: true },
+    // この店舗に所属し予約割当可能なスタッフ + 基本シフト曜日
+    prisma.staff.findMany({
+      where: { storeId: store.id, isActive: true, isAssignable: true },
+      select: { id: true, baseShiftDays: true },
     }),
     // この店舗の CONFIRMED 予約
     prisma.reservation.findMany({
@@ -138,12 +131,9 @@ export default defineEventHandler(async (event) => {
         status: 'CONFIRMED',
         startAt: { gte: fromDate, lt: new Date(toDate.getTime() + 86400000) },
       },
-      select: { bedId: true, practitionerId: true, startAt: true, endAt: true },
+      select: { bedId: true, staffId: true, startAt: true, endAt: true },
     }),
   ])
-
-  // 各スタッフの「メイン店舗以外でも勤務しうる」予約も検索する必要がある（他店ヘルプ中の人が当店予約とブッキングしないように）
-  // …は practitionerId 単位で当店の reservations を見るだけで十分（他店との衝突は他店の availability で別途検証される）。
 
   // ─ 索引作成 ─
   const holidayDates = new Set(holidays.map(h => ymdOf(h.date)))
@@ -154,12 +144,7 @@ export default defineEventHandler(async (event) => {
     if (!closuresByDate.has(key)) closuresByDate.set(key, [])
     closuresByDate.get(key)!.push({ startMin: parseHm(c.startTime), endMin: parseHm(c.endTime) })
   }
-  const shiftsByDateStaff = new Map<string, { startMin: number, endMin: number }>()
-  for (const s of shifts) {
-    const key = `${ymdOf(s.date)}:${s.practitionerId}`
-    shiftsByDateStaff.set(key, { startMin: parseHm(s.startTime), endMin: parseHm(s.endTime) })
-  }
-  // (date, practitionerId) → 予約レンジ list  ※ 時刻は JST 日内分（BusinessHour と同じ基準）
+  // (date, staffId) → 予約レンジ list  ※ 時刻は JST 日内分（BusinessHour と同じ基準）
   const reservationsByDateStaff = new Map<string, { startMin: number, endMin: number }[]>()
   // (date, bedId) → 予約レンジ list
   const reservationsByDateBed = new Map<string, { startMin: number, endMin: number }[]>()
@@ -177,7 +162,7 @@ export default defineEventHandler(async (event) => {
     // 日跨ぎ予約は想定していない（営業時間内なので発生しない）が、念のため start 側の日に紐付ける
     const key = start.ymd
     const range = { startMin: start.min, endMin: end.min }
-    const kStaff = `${key}:${r.practitionerId}`
+    const kStaff = `${key}:${r.staffId}`
     if (!reservationsByDateStaff.has(kStaff)) reservationsByDateStaff.set(kStaff, [])
     reservationsByDateStaff.get(kStaff)!.push(range)
     const kBed = `${key}:${r.bedId}`
@@ -287,14 +272,12 @@ export default defineEventHandler(async (event) => {
           if (!overlapsAny(rs, s, e)) freeBeds++
         }
 
-        // 空きスタッフ数（当店勤務 + 開始時刻に出勤 + 他予約と被らない）
+        // 空きスタッフ数（基本シフト曜日に含まれる + 他予約と被らない）
+        // 出勤時間帯は店舗の営業時間レンジに従う(最終レンジは最終受付時刻まで担当可)
         let freeStaff = 0
-        for (const p of practitioners) {
-          const shift = shiftsByDateStaff.get(`${ymd}:${p.id}`)
-          if (!shift) continue
-          // 開始時刻に出勤していれば担当可(施術がシフト終了をはみ出しても最後まで対応する想定)
-          if (shift.startMin > s || shift.endMin < s) continue
-          const rs = reservationsByDateStaff.get(`${ymd}:${p.id}`) ?? []
+        for (const st of staffs) {
+          if (!st.baseShiftDays.includes(dayOfWeek)) continue
+          const rs = reservationsByDateStaff.get(`${ymd}:${st.id}`) ?? []
           if (overlapsAny(rs, s, e)) continue
           freeStaff++
         }

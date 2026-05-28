@@ -38,7 +38,7 @@ type TodayReservation = {
   endAt: string
   store: { id: number, name: string }
   bed: { id: number, name: string }
-  practitioner: { id: number, name: string }
+  staff: { id: number, name: string }
   menu: { id: number, name: string, durationMinutes: number, priceJpy: number }
   customer: { id: number, name: string | null }
 }
@@ -236,7 +236,7 @@ function badge(r: TodayReservation) {
                 {{ r.menu.name }}
               </td>
               <td class="px-3 py-2.5 text-slate-700 whitespace-nowrap">
-                {{ r.practitioner.name }} / {{ r.bed.name }}
+                {{ r.staff.name }} / {{ r.bed.name }}
               </td>
               <td class="px-3 py-2.5">
                 <span class="inline-block px-2 py-0.5 rounded border text-xs" :class="badge(r).class">

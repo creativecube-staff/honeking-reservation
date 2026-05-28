@@ -65,7 +65,7 @@ export default defineEventHandler(async (event) => {
           reservationId: reservationId ?? null,
           quantity,
           unitPriceJpyAtSale,
-          soldByPractitionerId: currentUser.id,
+          soldByLoginId: currentUser.id,
           note: note?.trim() || null,
         },
       })

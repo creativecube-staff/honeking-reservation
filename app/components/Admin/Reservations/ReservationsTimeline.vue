@@ -27,7 +27,7 @@ type Reservation = {
   startAt: string
   endAt: string
   bed: { id: number, name: string }
-  practitioner: { id: number, name: string }
+  staff: { id: number, name: string }
   menu: { id: number, name: string, durationMinutes: number, priceJpy: number }
   customer: { id: number, name: string | null, phone: string | null, email: string | null }
 }
@@ -176,7 +176,7 @@ defineExpose({ refresh })
             {{ getReservation(range.id)!.menu.name }}
           </div>
           <div class="text-[9px] leading-tight truncate opacity-70">
-            担当: {{ getReservation(range.id)!.practitioner.name }}
+            担当: {{ getReservation(range.id)!.staff.name }}
           </div>
         </div>
       </template>

@@ -29,7 +29,7 @@ type Reservation = {
   endAt: string
   store: { id: number, name: string }
   bed: { id: number, name: string }
-  practitioner: { id: number, name: string }
+  staff: { id: number, name: string }
   menu: { id: number, name: string, durationMinutes: number, priceJpy: number }
 }
 type ReservationListResponse = {
@@ -144,7 +144,7 @@ const totalPaidJpy = computed(() => {
 type SortDir = 'asc' | 'desc'
 
 // 来店履歴: 日時 / 店舗 / メニュー / 担当 / 状態
-type ReservationSortKey = 'startAt' | 'store' | 'menu' | 'practitioner' | 'status'
+type ReservationSortKey = 'startAt' | 'store' | 'menu' | 'staff' | 'status'
 const resSortKey = ref<ReservationSortKey>('startAt')
 const resSortDir = ref<SortDir>('desc')
 function toggleResSort(key: ReservationSortKey) {
@@ -161,7 +161,7 @@ const sortedReservations = computed(() => {
     if (key === 'startAt') { av = a.startAt; bv = b.startAt }
     else if (key === 'store') { av = a.store.name; bv = b.store.name }
     else if (key === 'menu') { av = a.menu.name; bv = b.menu.name }
-    else if (key === 'practitioner') { av = a.practitioner.name; bv = b.practitioner.name }
+    else if (key === 'staff') { av = a.staff.name; bv = b.staff.name }
     else if (key === 'status') {
       av = displayStatus(a.status, a.endAt)
       bv = displayStatus(b.status, b.endAt)
@@ -563,10 +563,10 @@ async function saveNote() {
               </th>
               <th
                 class="text-left px-3 py-2 font-semibold text-slate-700 border-b border-[#dcdcde] cursor-pointer select-none hover:bg-[#eef0f1]"
-                @click="toggleResSort('practitioner')"
+                @click="toggleResSort('staff')"
               >
                 担当
-                <span class="text-slate-400 text-[10px] ml-1">{{ resSortKey === 'practitioner' ? (resSortDir === 'asc' ? '▲' : '▼') : '↕' }}</span>
+                <span class="text-slate-400 text-[10px] ml-1">{{ resSortKey === 'staff' ? (resSortDir === 'asc' ? '▲' : '▼') : '↕' }}</span>
               </th>
               <th
                 class="text-left px-3 py-2 font-semibold text-slate-700 border-b border-[#dcdcde] cursor-pointer select-none hover:bg-[#eef0f1]"
@@ -610,7 +610,7 @@ async function saveNote() {
                 <span class="text-xs text-slate-500">({{ r.menu.durationMinutes }}分 / ¥{{ yen(r.menu.priceJpy) }})</span>
               </td>
               <td class="px-3 py-2 text-xs">
-                {{ r.practitioner.name }}<br>
+                {{ r.staff.name }}<br>
                 <span class="text-slate-500">{{ r.bed.name }}</span>
               </td>
               <td class="px-3 py-2">

@@ -88,7 +88,7 @@ export default defineEventHandler(async (event) => {
       include: {
         store: { select: { id: true, name: true } },
         bed: { select: { id: true, name: true } },
-        practitioner: { select: { id: true, name: true } },
+        staff: { select: { id: true, name: true } },
         menu: { select: { id: true, name: true, durationMinutes: true, priceJpy: true } },
         customer: { select: { id: true, name: true, phone: true, email: true } },
       },

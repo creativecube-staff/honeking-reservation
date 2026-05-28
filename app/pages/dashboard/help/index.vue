@@ -17,8 +17,9 @@ definePageMeta({ layout: 'admin' })
 interface Topic {
   id: string
   title: string
-  body: string[] // 段落の配列
-  audience?: '受付' | '施術者' | '店長以上' | 'オーナー専用' // 主な対象（任意）
+  // 段落の配列。各要素は HTML として展開される（v-html）。
+  // <ul> / <ol> / <strong> / <code> や、赤背景の警告ボックス（rounded-sm bg-red-50 ...）も使える。
+  body: string[]
 }
 interface Category {
   id: string
@@ -28,98 +29,200 @@ interface Category {
   topics: Topic[]
   // true のときオーナーログインでだけ表示する（管理者専用マニュアル）
   ownerOnly?: boolean
+  // true のとき赤系で強調表示する（個人情報など、絶対に守ってほしい運用ルール）
+  important?: boolean
 }
 
 const categories: Category[] = [
   // ── ここから下はオーナー専用マニュアル（ownerOnly: true）。
   //    管理者ログインのときだけ表示される。
+  //    label と icon は管理者(全店)モードのナビ（layouts/admin.vue の adminNavItems）と必ず揃えること。
+  //    並び順もナビと同じ順序にする（店舗管理 → 休日管理 → 共通メニュー管理 → ...）。
+  {
+    id: 'basics',
+    label: '基本操作',
+    icon: 'i-lucide-compass',
+    description: '管理画面の操作の基本。最初に読むと迷いません。',
+    ownerOnly: true,
+    topics: [
+      {
+        id: 'mode-switcher',
+        title: '「管理者」と「個別店舗」のモードを切り替える',
+        body: [
+          '画面右上に <strong>店舗を切り替える選択ボタン（▼）</strong>があります。クリックすると一覧が出るので、見たいモードを選びます。',
+          '<ul>'
+          + '<li><strong>「管理者」を選ぶ</strong> → 全店共通の設定を扱うモード。ナビに「店舗管理・休日管理・共通メニュー管理・共通商品管理・ログイン管理・売上管理」が出ます。</li>'
+          + '<li><strong>店舗名（例: 流山おおたかの森整骨院）を選ぶ</strong> → その店舗の日々のオペレーション用モード。ナビが「予約・販売・顧客・スタッフ・メニュー・商品・売上」に変わります。</li>'
+          + '</ul>',
+          '<div class="rounded-sm bg-amber-50 border border-amber-200 px-3 py-2 text-amber-900"><strong>💡 ヒント</strong>: 店舗を切り替えると自動的にダッシュボードに戻ります（前の画面の情報が新しい店舗で意味を持たない可能性があるため）。</div>',
+        ],
+      },
+    ],
+  },
   {
     id: 'admin-stores',
-    label: '店舗管理（オーナー向け）',
-    icon: 'i-lucide-store',
-    description: '店舗の新規追加・編集・無効化・完全削除に関するオーナー向けマニュアル。',
+    label: '店舗管理',
+    icon: 'i-lucide-building-2',
+    description: '店舗の追加・編集・休止・削除など、店舗マスタの操作です。',
     ownerOnly: true,
     topics: [
       {
         id: 'admin-add-store',
         title: '新規店舗を追加する',
-        audience: 'オーナー専用',
         body: [
-          'ヘッダーの店舗スイッチャーで「管理者（全店）」を選び、「店舗管理」タブ → タイトル隣の「新規追加」ボタンを押します。',
-          '基本情報（店舗名・スラッグ・住所・電話・メールなど）に加えて、<strong>ベッド数</strong>と<strong>営業時間</strong>を同じフォーム上で設定します。保存すると、店舗・ログインアカウント・ベッド連番（ベッド1～N）・標準営業時間（月〜金 9:30-12:30 + 15:00-20:30 / 土日 9:30-12:30 + 15:00-18:00）が1つのトランザクションで一括登録されます。<strong>作成した瞬間からお客様の予約受付が可能</strong>な状態になります。',
-          'ベッドはこの画面でも個別に名前変更や追加・削除ができます。営業時間も枠をドラッグして変更できます（あとから店舗詳細でも変更可）。',
-          '保存に成功すると、その店舗のログイン情報（ID とパスワード）が1回だけ表示されます。<span class="text-red-700 font-semibold">パスワードはこの画面でしか見られない</span>ので、必ず控えてから「控えました・店舗一覧へ」を押してください。',
+          '画面右上で「<strong>管理者</strong>」を選び、「<strong>店舗管理</strong>」タブの右上「<strong>新規追加</strong>」ボタンを押します。',
+          '<ol>'
+          + '<li><strong>基本情報</strong>を入力<ul>'
+          + '<li><strong>店舗名</strong>（例: 流山おおたかの森整骨院）</li>'
+          + '<li><strong>スラッグ</strong>: 予約 URL に使う英字 ID（例: <code>otakanomori</code>）。一度決めたら変更しない方が無難です</li>'
+          + '<li>都道府県・市区町村・住所・電話・メール（任意）</li>'
+          + '</ul></li>'
+          + '<li><strong>ベッド</strong>を設定<br>初期は「ベッド1」〜「ベッド4」の 4 台。追加・削除・名前変更ができます。</li>'
+          + '<li><strong>営業時間</strong>を確認<br>標準時間（月〜金 9:30-12:30 + 15:00-20:30、土日 9:30-12:30 + 15:00-18:00）が初期表示されます。マウスで枠を動かして変更可能。</li>'
+          + '<li><strong>「保存」</strong>を押すと、店舗・ベッド・営業時間・ログインアカウントがまとめて作成されます。作成した瞬間からお客様の予約受付が可能です。</li>'
+          + '</ol>',
+          '<div class="rounded-sm bg-red-50 border-2 border-red-300 px-3 py-2 text-red-800"><strong>⚠ 重要</strong><br>保存後、その店舗の<strong>ログイン ID とパスワードが 1 回だけ</strong>表示されます。「ログイン情報をコピー」ボタンでクリップボードにコピーできます。<br><strong>パスワードはこの画面でしか確認できない</strong>ので、必ず控えてから「控えました・店舗一覧へ」を押してください。</div>',
+        ],
+      },
+      {
+        id: 'admin-edit-store',
+        title: '既存の店舗の情報を変更する',
+        body: [
+          '画面右上で「<strong>管理者</strong>」を選び、「<strong>店舗管理</strong>」タブの一覧から、変更したい店舗名（青いリンク）をクリックします。',
+          '<ul>'
+          + '<li><strong>基本情報</strong>（店舗名・住所・電話・メール・表示順）</li>'
+          + '<li><strong>ベッド</strong>（追加・削除・名前変更）</li>'
+          + '<li><strong>営業時間</strong>（曜日ごとの時間帯）</li>'
+          + '</ul>'
+          + 'をすべて 1 つの画面で編集できます。',
+          '<div class="rounded-sm bg-amber-50 border border-amber-200 px-3 py-2 text-amber-900"><strong>💡 保存ルール</strong><br>・ベッドの追加・削除は<strong>その場で即時反映</strong>（更新ボタン不要）<br>・基本情報と営業時間は画面下の「<strong>更新</strong>」ボタンで保存<br>・未保存の変更があると「未保存の変更があります」と表示されます</div>',
         ],
       },
       {
         id: 'admin-filter-sort-stores',
         title: '店舗一覧を絞り込む・並び替える',
-        audience: 'オーナー専用',
         body: [
-          '「店舗管理」一覧の右上「あいまい検索」窓に、店舗名・スラッグ・都道府県・市区町村のいずれかを入力すると部分一致で絞り込めます。スペース区切りで AND 検索になります（例: <code>流山 整骨</code>）。',
-          '列見出し「都道府県」「市区町村」「表示順」をクリックでソート（再クリックで昇順 ⇔ 降順）。アクティブな列はオレンジのシェブロンが表示されます。',
-          '上部のステータスタブで「すべて / 有効 / 無効」を切替。件数は検索結果に追従するので、絞り込んだあとに何件あるかすぐ把握できます。',
+          '店舗管理タブの一覧画面で:',
+          '<ul>'
+          + '<li><strong>右上の検索ボックス</strong>に店舗名・スラッグ・都道府県・市区町村のいずれかを入力 → 部分一致で絞り込み。スペース区切りで AND 検索（例: <code>流山 整骨</code>）</li>'
+          + '<li><strong>列見出し</strong>「都道府県」「市区町村」「表示順」をクリックでソート（再クリックで昇順 ⇔ 降順）</li>'
+          + '<li>上の<strong>タブ</strong>で「すべて / 有効 / 無効」を切り替え（無効化済みの店舗を含めるか）</li>'
+          + '</ul>',
         ],
       },
       {
         id: 'admin-deactivate-vs-purge-store',
         title: '店舗の「無効化」と「完全削除」の違い',
-        audience: 'オーナー専用',
         body: [
-          '<strong>無効化（ソフト削除）</strong>: データを残したまま予約受付から外す。後で「有効化」を押せば戻せます。普段はこちらを使ってください。',
-          '<strong>完全削除（物理削除）</strong>: 店舗本体と関連データ（予約・ベッド・営業時間・店舗特別メニュー等）を一括で物理削除します。<span class="text-red-700 font-semibold">取り消し不可</span>。誤爆防止のため、無効化済みの店舗だけが対象で、確認モーダルで店舗名を完全に入力する必要があります。',
-          'この店舗のスタッフが「他店の予約」を担当している場合は、他店データを巻き込むため完全削除は拒否されます。先にその担当を整理してください。',
+          '<div class="rounded-sm bg-green-50 border border-green-300 px-3 py-2 text-green-900"><strong>✅ 無効化（休止） — 普段はこちら</strong><br>一覧から見えるけれど、予約受付からは外れます。データは残ったままなので、「<strong>有効化</strong>」を押せば元に戻せます。店舗をしばらく閉める時はこちらを使ってください。</div>',
+          '<div class="rounded-sm bg-red-50 border-2 border-red-300 px-3 py-2 text-red-800"><strong>⚠ 完全削除 — 取り消し不可</strong><br>店舗本体と関連データ（予約・ベッド・営業時間・店舗特別メニューなど）を<strong>すべて消去</strong>します。<br>誤操作を防ぐため:<ul><li>すでに<strong>無効化済みの店舗だけ</strong>が対象</li><li>確認画面で<strong>店舗名をそのまま入力</strong>する必要あり</li></ul></div>',
+          '<div class="rounded-sm bg-amber-50 border border-amber-200 px-3 py-2 text-amber-900"><strong>💡 拒否される条件</strong><br>この店舗のスタッフが <strong>他店の予約を担当</strong>している場合、他店データを巻き込むため完全削除は拒否されます。先にその担当を整理してから削除してください。</div>',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'admin-holidays',
+    label: '休日管理',
+    icon: 'i-lucide-calendar-x',
+    description: '全店まとめて休む「店休日」と、国民の「祝日」を登録するページです。',
+    ownerOnly: true,
+    topics: [
+      {
+        id: 'holidays-overview',
+        title: '「店休日」と「祝日」の違い',
+        body: [
+          '<ul>'
+          + '<li><strong>店休日</strong> = 全店舗を<strong>まとめて休み</strong>にする日（年末年始・棚卸し・研修など）。登録するとその日の予約枠は全店でゼロになり、お客様の予約画面でも予約が取れません。</li>'
+          + '<li><strong>祝日</strong> = 国民の祝日（元日・成人の日・海の日 など）。祝日は<strong>営業します</strong>。短縮営業にしたい場合は店舗ごとに祝日用の営業時間を設定できます（下のトピック参照）。</li>'
+          + '</ul>',
+          'どちらも画面右上の選択ボタン（▼）で「<strong>管理者</strong>」を選んだときに出る「休日管理」タブから登録します。個別店舗モードに切り替えるとこのタブは見えません。',
+        ],
+      },
+      {
+        id: 'holidays-add-edit',
+        title: '店休日・祝日を追加・編集する',
+        body: [
+          '<ul>'
+          + '<li><strong>追加</strong>: 各セクション右上の「<strong>＋ 店休日を追加</strong>」または「<strong>＋ 祝日を追加</strong>」ボタンで入力画面が開きます。日付とメモ（任意）を入れて「追加」。祝日は名称（例: 海の日）も必須。</li>'
+          + '<li><strong>編集・削除</strong>: 一覧の行にマウスを乗せると右側に「<strong>編集 | 削除</strong>」が現れます。</li>'
+          + '<li><strong>対象年プルダウン</strong>: 登録済みの年だけが並びます。2028 年の祝日を初めて追加すると自動で「2028年」が増え、画面もその年に切り替わります。</li>'
+          + '</ul>',
+          '<div class="rounded-sm bg-amber-50 border border-amber-200 px-3 py-2 text-amber-900"><strong>💡 店休日は全店一括</strong><br>店休日は 1 度の操作で<strong>全店ぶん同時に登録</strong>されます。「ある店舗だけ休み」という登録はできないので、その場合は予約管理画面でその日の予約枠を埋めて対応してください。</div>',
+        ],
+      },
+      {
+        id: 'holidays-business-hours-link',
+        title: '祝日の営業時間を店舗ごとに変える',
+        body: [
+          '祝日のマスタ自体は全店共通ですが、<strong>祝日の営業時間は店舗ごとに別々に</strong>設定できます。',
+          '<ol>'
+          + '<li>画面右上で「<strong>管理者</strong>」を選び、「<strong>店舗管理</strong>」タブから対象店舗を開く</li>'
+          + '<li>営業時間欄の一番下にある「<strong>祝</strong>」レンジに時間帯を入力</li>'
+          + '<li>画面下の「<strong>更新</strong>」を押して保存</li>'
+          + '</ol>',
+          '<div class="rounded-sm bg-amber-50 border border-amber-200 px-3 py-2 text-amber-900"><strong>💡 空のままだと?</strong><br>「祝」レンジを空のままにしておくと、祝日は<strong>日曜と同じ営業時間</strong>で運用されます。</div>',
+          '<div class="rounded-sm bg-sky-50 border border-sky-200 px-3 py-2 text-sky-900"><strong>📌 例: 祝日を土曜と同じ営業時間にしたい</strong><br>「祝」行にマウスを乗せて「<strong>土曜と同じ</strong>」プリセットボタンをクリック → 画面下「更新」。</div>',
         ],
       },
     ],
   },
   {
     id: 'admin-menus',
-    label: 'メニュー管理（オーナー向け）',
-    icon: 'i-lucide-list',
-    description: '共通メニューと店舗特別メニューの関係・キャンペーン運用・削除に関するオーナー向けマニュアル。',
+    label: '共通メニュー管理',
+    icon: 'i-lucide-clipboard-list',
+    description: '全店共通のメニューと、店舗ごとの特別メニュー（キャンペーンなど）を登録・編集するページです。',
     ownerOnly: true,
     topics: [
       {
         id: 'admin-common-vs-store-menus',
-        title: '共通メニューと店舗特別メニューの違い',
-        audience: 'オーナー専用',
+        title: '「共通メニュー」と「店舗特別メニュー」の違い',
         body: [
-          '<strong>共通メニュー</strong>: 全店舗で自動的に利用可能。ヘッダーの店舗スイッチャーで「管理者（全店）」を選び、「メニュー管理」から登録します。',
-          '<strong>店舗特別メニュー</strong>: その店舗だけのメニュー。店舗スイッチャーで対象店舗に切り替えてから「メニュー管理」を開くと、その店舗の特別メニュー一覧になります。',
-          'お客様側の予約画面では、共通メニューが先頭、その下に店舗特別メニューが並びます。お客様は両方からメニューを選べます。',
+          '<ul>'
+          + '<li><strong>共通メニュー</strong> = 全店舗で自動的にお客様の予約画面に出るメニュー（全身整体 60 分、骨盤矯正 など）。画面右上で「<strong>管理者</strong>」を選ぶとナビに「<strong>共通メニュー管理</strong>」タブが現れ、そこから登録・編集します。</li>'
+          + '<li><strong>店舗特別メニュー</strong> = その店舗だけのメニュー（その店だけのキャンペーン・独自施術 など）。画面右上で<strong>対象店舗（例: 流山おおたかの森整骨院）</strong>を選ぶとナビが店舗用に切り替わり、「メニュー」タブから登録できます。</li>'
+          + '</ul>',
+          'お客様の予約画面では、共通メニューが先頭、その下に店舗特別メニューが並びます。お客様はどちらからでも選べます。',
         ],
       },
       {
         id: 'admin-menu-store-exclusion',
-        title: '共通メニューを特定の店舗で「非表示」にする',
-        audience: 'オーナー専用',
+        title: '共通メニューを特定の店舗だけで「非表示」にする',
         body: [
-          '「全店共通だけど、この店舗だけは出したくない」というケース（機材・スタッフスキルの都合、新メニューの段階展開など）に使います。',
-          '共通メニューを編集 → モーダル下部の「<strong>以下の店舗では表示しない</strong>」チェックボックスでその店舗にチェックを入れて更新します。お客様側のその店舗の予約画面ではこの共通メニューが表示されなくなります（他店ではそのまま表示）。',
-          'メニュー一覧の「<strong>非表示店舗</strong>」列に現在の設定が表示されます。チェックを外せば再び表示されるようになります。',
+          '「全店共通として登録しているけれど、この店舗だけは出したくない」というときに使います。',
+          '<div class="rounded-sm bg-sky-50 border border-sky-200 px-3 py-2 text-sky-900"><strong>📌 使うシーン</strong><br>・マタニティ整体は専門研修を受けたスタッフが居る店舗だけで出したい<br>・新メニューを 1 店舗で先に試してから他店に展開したい</div>',
+          '<ol>'
+          + '<li>画面右上で「<strong>管理者</strong>」を選び、「<strong>共通メニュー管理</strong>」タブを開く</li>'
+          + '<li>対象の共通メニューの「<strong>編集</strong>」を押す</li>'
+          + '<li>編集画面の下部「<strong>以下の店舗では表示しない</strong>」チェックボックスで、非表示にしたい店舗にチェック</li>'
+          + '<li>「更新」を押す</li>'
+          + '</ol>',
+          'チェックを入れた店舗の予約画面ではこのメニューが表示されなくなります。他の店舗では引き続き表示されます。一覧の「<strong>非表示店舗</strong>」列に現在の設定が見え、チェックを外せば再び表示されます。',
         ],
       },
       {
         id: 'admin-menu-replacement',
-        title: '期間限定キャンペーン: 店舗特別メニューで共通メニューを差し替える',
-        audience: 'オーナー専用',
+        title: '期間限定キャンペーンで共通メニューを「差し替える」',
         body: [
-          'たとえば共通メニュー「全身整体 60 分（通常価格 8,000円）」を、特定店舗で期間限定割引価格で出したいとき。',
-          '店舗スイッチャーでその店舗に切替 → 店舗特別メニューとして「オープン記念キャンペーン 全身整体 60 分（5,000円）」を作成 → 編集モーダルの「<strong>共通メニューと差し替える</strong>」ドロップダウンで「全身整体 60 分」を選択 → 「表示期間」の終了日を設定（例: 6/30 まで）。',
-          '期間中（〜 6/30）はその店舗のお客様予約画面に<strong>キャンペーン特別メニューだけ</strong>が表示され、対象の共通メニューは自動的に非表示になります。',
-          '<strong>終了日を過ぎたら自動的に共通メニューに戻ります</strong>（設定を消す手間なし）。「共通メニュー側で除外して、終わったら戻す」ような二度手間が不要です。',
-          'メニュー一覧の「<strong>差し替え対象</strong>」列に、その特別メニューがどの共通メニューを置き換えているか表示されます。',
+          'ある店舗だけ、ある期間だけ、共通メニューを<strong>別の価格・別の名前で出したい</strong>ときの仕組みです。',
+          '<div class="rounded-sm bg-sky-50 border border-sky-200 px-3 py-2 text-sky-900"><strong>📌 例</strong><br>共通メニュー「全身整体 60 分（通常 8,000 円）」を、流山おおたかの森店だけオープン記念で 5,000 円で出したい。</div>',
+          '<ol>'
+          + '<li>画面右上で対象店舗（例: 流山おおたかの森整骨院）を選び、「<strong>メニュー</strong>」タブを開く</li>'
+          + '<li>「<strong>＋ メニューを追加</strong>」で店舗特別メニュー「オープン記念キャンペーン 全身整体 60 分（5,000 円）」を作成</li>'
+          + '<li>編集画面の「<strong>共通メニューと差し替える</strong>」ドロップダウンで「全身整体 60 分」を選択</li>'
+          + '<li>「<strong>表示期間</strong>」の終了日を設定（例: 6/30 まで）</li>'
+          + '</ol>',
+          '<div class="rounded-sm bg-green-50 border border-green-300 px-3 py-2 text-green-900"><strong>✅ 自動で元に戻る</strong><br>期間中（〜 6/30）はその店舗の予約画面に<strong>キャンペーンメニューだけ</strong>が表示され、元の共通メニューは自動的に非表示。<br>終了日を過ぎたら<strong>自動的に元の共通メニューに戻ります</strong>。設定を手動で消す必要はありません。</div>',
+          '管理画面のメニュー一覧の「<strong>差し替え対象</strong>」列に、その特別メニューがどの共通メニューを置き換えているかが表示されます。',
         ],
       },
       {
         id: 'admin-deactivate-vs-purge-menu',
         title: 'メニューの「無効化」と「完全削除」の違い',
-        audience: 'オーナー専用',
         body: [
-          '<strong>無効化</strong>: お客様の予約画面に出なくなる。後で「有効化」で戻せます。普段はこちらで運用してください。',
-          '<strong>完全削除</strong>: 物理削除。無効化済みのメニューだけが対象で、確認モーダルでメニュー名の完全タイプ入力が必要です。',
-          'そのメニューを使った予約が <strong>1 件でも残っていれば、履歴保護のため完全削除は拒否</strong>されます。古いキャンペーン用メニューなど、本当に履歴ごと消したい場合だけ使ってください。',
+          '<div class="rounded-sm bg-green-50 border border-green-300 px-3 py-2 text-green-900"><strong>✅ 無効化（停止） — 普段はこちら</strong><br>お客様の予約画面からそのメニューが消えます。データは残るので、「<strong>有効化</strong>」を押せば元に戻せます。</div>',
+          '<div class="rounded-sm bg-red-50 border-2 border-red-300 px-3 py-2 text-red-800"><strong>⚠ 完全削除 — 取り消し不可</strong><br>メニューデータ自体を消去します。無効化済みのメニューだけが対象で、確認画面でメニュー名をそのまま入力する必要があります。</div>',
+          '<div class="rounded-sm bg-red-50 border-2 border-red-300 px-3 py-2 text-red-800"><strong>⚠ 重要: 履歴ある場合は拒否</strong><br>そのメニューを使った予約が <strong>1 件でも残っていれば、履歴保護のため完全削除は拒否</strong>されます。古いキャンペーン用メニューなど、本当に履歴ごと消したい場合だけ使ってください。</div>',
         ],
       },
     ],
@@ -211,13 +314,6 @@ watch(normalizedQuery, (q) => {
 function isOpen(id: string): boolean {
   return openTopic.value.has(id)
 }
-
-function audienceBadge(a: NonNullable<Topic['audience']>): { label: string, class: string } {
-  if (a === 'オーナー専用') return { label: 'オーナー専用', class: 'bg-orange-100 text-orange-800 border-orange-300' }
-  if (a === '店長以上') return { label: '店長以上', class: 'bg-purple-100 text-purple-800 border-purple-300' }
-  if (a === '施術者') return { label: '施術者向け', class: 'bg-blue-100 text-blue-800 border-blue-300' }
-  return { label: '受付向け', class: 'bg-green-100 text-green-800 border-green-300' }
-}
 </script>
 
 <template>
@@ -293,6 +389,14 @@ function audienceBadge(a: NonNullable<Topic['audience']>): { label: string, clas
               :class="cat.important ? 'size-5 text-red-600' : 'size-5 text-orange-500'"
             />
             <span :class="cat.important ? 'text-red-900' : ''">{{ cat.label }}</span>
+            <!-- ownerOnly カテゴリには「オーナー専用」バッジを 1 つだけ付ける（各トピックには付けない） -->
+            <span
+              v-if="cat.ownerOnly && !cat.important"
+              class="ml-auto inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold text-orange-700 bg-orange-100 border border-orange-300 rounded-sm tracking-wide"
+            >
+              <UIcon name="i-lucide-crown" class="size-3" />
+              オーナー専用
+            </span>
             <span
               v-if="cat.important"
               class="ml-auto inline-flex items-center gap-1 px-2 py-0.5 text-xs font-bold text-red-700 bg-red-100 border border-red-300 rounded-sm tracking-wide"
@@ -307,28 +411,39 @@ function audienceBadge(a: NonNullable<Topic['audience']>): { label: string, clas
         </div>
         <ul class="divide-y divide-[#f0f0f1]">
           <li v-for="topic in cat.topics" :key="topic.id">
-            <button
-              type="button"
-              class="w-full flex items-center gap-2 px-4 py-3 text-left hover:bg-orange-50/40"
-              @click="toggleTopic(topic.id)"
-            >
-              <UIcon
-                :name="isOpen(topic.id) ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'"
-                class="size-4 flex-shrink-0 text-slate-500"
-              />
-              <span class="flex-1 text-sm font-semibold text-slate-900">{{ topic.title }}</span>
-              <span
-                v-if="topic.audience"
-                class="inline-block text-[10px] px-1.5 py-0.5 rounded border font-semibold"
-                :class="audienceBadge(topic.audience).class"
+            <!-- important カテゴリ（セキュリティ等）はアコーディオンを使わず常時展開。
+                 絶対に読み飛ばされないように、開閉操作なしで全文が見える状態にする。 -->
+            <template v-if="cat.important">
+              <div class="px-4 py-3">
+                <div class="text-sm font-semibold text-red-900 mb-2 flex items-center gap-2">
+                  <UIcon name="i-lucide-shield-alert" class="size-4 text-red-600 flex-shrink-0" />
+                  {{ topic.title }}
+                </div>
+                <div class="help-body pl-6 text-sm text-slate-700 space-y-3 leading-relaxed">
+                  <!-- eslint-disable-next-line vue/no-v-html -->
+                  <div v-for="(para, i) in topic.body" :key="i" v-html="para" />
+                </div>
+              </div>
+            </template>
+            <!-- 通常カテゴリはアコーディオン -->
+            <template v-else>
+              <button
+                type="button"
+                class="w-full flex items-center gap-2 px-4 py-3 text-left hover:bg-orange-50/40"
+                @click="toggleTopic(topic.id)"
               >
-                {{ audienceBadge(topic.audience).label }}
-              </span>
-            </button>
-            <div v-if="isOpen(topic.id)" class="px-4 pb-4 pl-10 text-sm text-slate-700 space-y-2">
-              <!-- eslint-disable-next-line vue/no-v-html -->
-              <p v-for="(para, i) in topic.body" :key="i" v-html="para" />
-            </div>
+                <UIcon
+                  :name="isOpen(topic.id) ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'"
+                  class="size-4 flex-shrink-0 text-slate-500"
+                />
+                <span class="flex-1 text-sm font-semibold text-slate-900">{{ topic.title }}</span>
+              </button>
+              <div v-if="isOpen(topic.id)" class="help-body px-4 pb-4 pl-10 text-sm text-slate-700 space-y-3 leading-relaxed">
+                <!-- 各段落は v-html。<ul>/<ol>/<strong>/<code> や、赤背景の警告ボックスも展開できる -->
+                <!-- eslint-disable-next-line vue/no-v-html -->
+                <div v-for="(para, i) in topic.body" :key="i" v-html="para" />
+              </div>
+            </template>
           </li>
         </ul>
       </section>
@@ -347,3 +462,28 @@ function audienceBadge(a: NonNullable<Topic['audience']>): { label: string, clas
     </div>
   </div>
 </template>
+
+<style scoped>
+/* ヘルプ本文の v-html 展開部分に対するスタイル。Tailwind reset で list-style が消されるので明示的に戻す。 */
+.help-body :deep(ul) {
+  list-style: disc;
+  padding-left: 1.25rem;
+  margin: 0.25rem 0;
+}
+.help-body :deep(ol) {
+  list-style: decimal;
+  padding-left: 1.5rem;
+  margin: 0.25rem 0;
+}
+.help-body :deep(li) {
+  margin: 0.25rem 0;
+}
+.help-body :deep(code) {
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 3px;
+  padding: 1px 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.875em;
+}
+</style>

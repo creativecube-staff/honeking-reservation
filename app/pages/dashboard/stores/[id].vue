@@ -132,18 +132,18 @@ async function onDelete() {
 <template>
   <div class="store-detail">
     <div class="store-detail-header flex items-center gap-3 mb-1">
-      <h1 class="text-2xl font-semibold text-slate-900">
+      <h1 class="store-detail-title text-2xl font-semibold text-slate-900">
         {{ store?.name }}
       </h1>
       <span
         v-if="store && !store.isActive"
-        class="inline-flex items-center text-xs text-slate-700 bg-slate-100 border border-slate-300 px-2 py-0.5 rounded-sm"
+        class="store-detail-inactive-badge inline-flex items-center text-xs text-slate-700 bg-slate-100 border border-slate-300 px-2 py-0.5 rounded-sm"
       >
         無効
       </span>
     </div>
     <p class="text-sm text-slate-600 mb-5">
-      <NuxtLink to="/dashboard/stores" class="text-blue-700 hover:text-blue-900 hover:underline">
+      <NuxtLink to="/dashboard/stores" class="store-detail-back text-blue-700 hover:text-blue-900 hover:underline">
         ← 店舗一覧に戻る
       </NuxtLink>
     </p>
@@ -157,7 +157,7 @@ async function onDelete() {
         <template #extra>
           <!-- ベッド管理（基本情報の枠内・コンパクト表示。追加/削除は即時反映） -->
           <div class="store-detail-beds">
-            <h3 class="text-sm font-semibold text-slate-700 mb-2">
+            <h3 class="store-detail-beds-title text-sm font-semibold text-slate-700 mb-2">
               ベッド
             </h3>
             <AdminStoreBedsTab :store-id="id" />
@@ -168,7 +168,7 @@ async function onDelete() {
 
     <!-- 営業時間（保存は下部の「更新」にまとめる） -->
     <section class="store-detail-hours mb-8">
-      <h2 class="text-lg font-semibold text-slate-900 mb-3">
+      <h2 class="store-detail-hours-title text-lg font-semibold text-slate-900 mb-3">
         営業時間
       </h2>
       <AdminScheduleBusinessHoursPanel
@@ -192,21 +192,21 @@ async function onDelete() {
           <button
             type="button"
             :disabled="submitting || deleting || !anyDirty"
-            class="px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:bg-slate-300 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-sm shadow-sm"
+            class="store-detail-update px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:bg-slate-300 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-sm shadow-sm"
             @click="onUpdate"
           >
             {{ submitting ? '保存中...' : '更新' }}
           </button>
           <NuxtLink
             to="/dashboard/stores"
-            class="px-4 py-2 border border-[#8c8f94] bg-white hover:bg-[#f6f7f7] text-slate-700 text-sm rounded-sm"
+            class="store-detail-cancel px-4 py-2 border border-[#8c8f94] bg-white hover:bg-[#f6f7f7] text-slate-700 text-sm rounded-sm"
           >
             キャンセル
           </NuxtLink>
-          <span v-if="saved && !anyDirty" class="text-sm text-green-700">
+          <span v-if="saved && !anyDirty" class="store-detail-saved text-sm text-green-700">
             ✓ 保存しました
           </span>
-          <span v-else-if="anyDirty" class="text-sm text-slate-500">
+          <span v-else-if="anyDirty" class="store-detail-dirty text-sm text-slate-500">
             未保存の変更があります
           </span>
         </div>
@@ -215,7 +215,7 @@ async function onDelete() {
           v-if="state.isActive"
           type="button"
           :disabled="submitting || deleting"
-          class="px-3 py-1.5 text-sm text-red-700 hover:text-red-900 hover:underline disabled:text-slate-400"
+          class="store-detail-deactivate px-3 py-1.5 text-sm text-red-700 hover:text-red-900 hover:underline disabled:text-slate-400"
           @click="onDelete"
         >
           {{ deleting ? '無効化中...' : 'この店舗を無効化（ゴミ箱）' }}

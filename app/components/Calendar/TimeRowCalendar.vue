@@ -445,9 +445,9 @@ const HANDLE_PX = 8 // 左右端のリサイズハンドル領域
             >
               ×
             </button>
-            <!-- バー内容（選択した時間。大きめに表示） -->
+            <!-- バー内容（選択した時間。コンパクトに表示） -->
             <slot name="bar" :range="r">
-              <div class="text-sm text-orange-900 font-semibold px-2 h-full flex items-center tabular-nums whitespace-nowrap overflow-hidden pointer-events-none">
+              <div class="text-xs text-orange-900 font-semibold px-2 h-full flex items-center tabular-nums whitespace-nowrap overflow-hidden pointer-events-none">
                 {{ r.startTime }}–{{ r.endTime }}
               </div>
             </slot>

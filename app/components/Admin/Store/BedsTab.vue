@@ -128,9 +128,9 @@ async function onActivate(bed: Bed) {
 </script>
 
 <template>
-  <div class="space-y-3">
+  <div class="store-beds space-y-3">
     <!-- ヘッダー: 件数 + 一括追加を 1 行にコンパクトに -->
-    <div class="flex items-center justify-between gap-3 flex-wrap">
+    <div class="store-beds-header flex items-center justify-between gap-3 flex-wrap">
       <div class="text-sm text-slate-700">
         有効 <strong>{{ counts.active }}</strong> 台<span v-if="counts.inactive" class="text-slate-500"> ／ 無効 {{ counts.inactive }} 台</span>
       </div>

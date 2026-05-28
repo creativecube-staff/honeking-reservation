@@ -110,22 +110,14 @@ function yen(n: number): string { return n.toLocaleString('ja-JP') }
 
 <template>
   <div>
-    <div class="flex items-center gap-3 mb-1">
-      <h1 class="text-2xl font-semibold text-slate-900">
-        {{ product?.name }}
-      </h1>
+    <AdminDetailHeader :title="product?.name" back-to="/dashboard/products" back-label="商品一覧に戻る">
       <span class="inline-flex items-center text-xs px-2 py-0.5 rounded-sm border" :class="product?.kind === 'VOUCHER' ? 'bg-purple-50 text-purple-800 border-purple-300' : 'bg-slate-100 text-slate-700 border-slate-300'">
         {{ product?.kind === 'VOUCHER' ? '回数券' : '物販' }}
       </span>
       <span v-if="product && !product.isActive" class="inline-flex items-center text-xs text-slate-700 bg-slate-100 border border-slate-300 px-2 py-0.5 rounded-sm">
         無効
       </span>
-    </div>
-    <p class="text-sm text-slate-600 mb-4">
-      <NuxtLink to="/dashboard/products" class="text-blue-700 hover:text-blue-900 hover:underline">
-        ← 商品一覧に戻る
-      </NuxtLink>
-    </p>
+    </AdminDetailHeader>
 
     <div v-if="product" class="max-w-2xl space-y-8">
       <!-- 基本情報フォーム -->

@@ -203,7 +203,7 @@ function yen(n: number): string { return n.toLocaleString('ja-JP') }
                   無効化
                 </button>
                 <button v-else type="button" :disabled="busy === p.id" class="text-green-700 hover:text-green-900 hover:underline disabled:text-slate-400" @click="activate(p)">
-                  復活
+                  有効化
                 </button>
               </div>
             </td>

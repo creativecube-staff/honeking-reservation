@@ -18,14 +18,17 @@ export default defineEventHandler(async (event) => {
     })
   }
 
+  // 作成時の初期セットアップ（ベッド名・営業時間）は Store のカラムではないので分離する
+  const { beds, businessHours, ...storeData } = parsed.data
+
   // 自動生成パスワード（平文は return でだけ使い、DB には bcrypt ハッシュのみ保存）
   const password = generatePassword()
   const passwordHash = await bcrypt.hash(password, 10)
 
   try {
-    // 店舗とログインアカウントは不可分なのでトランザクションで同時作成
+    // 店舗・ログインアカウント・初期ベッド・営業時間は不可分なのでトランザクションで同時作成
     const { store, username } = await prisma.$transaction(async (tx) => {
-      const created = await tx.store.create({ data: parsed.data })
+      const created = await tx.store.create({ data: storeData })
       // 店舗ログインアカウント: username=店舗slug / 役職=店長(自店の全機能) / 施術割当なし。
       // 非 OWNER なので、このアカウントでログインすると store-switcher は自店固定になる。
       const account = await tx.practitioner.create({
@@ -45,6 +48,30 @@ export default defineEventHandler(async (event) => {
         },
         select: { username: true },
       })
+
+      // 初期ベッドを名前リストから一括作成（表示順は配列順。空なら作らない）
+      if (beds.length > 0) {
+        await tx.bed.createMany({
+          data: beds.map((name, i) => ({
+            storeId: created.id,
+            name,
+            displayOrder: i,
+          })),
+        })
+      }
+
+      // 営業時間レンジをまとめて作成（標準値 or フォームで編集した値。空なら作らない＝店休扱い）
+      if (businessHours.length > 0) {
+        await tx.businessHour.createMany({
+          data: businessHours.map(r => ({
+            storeId: created.id,
+            dayOfWeek: r.dayOfWeek,
+            startTime: r.startTime,
+            endTime: r.endTime,
+          })),
+        })
+      }
+
       return { store: created, username: account.username }
     })
 

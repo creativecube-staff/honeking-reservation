@@ -131,22 +131,14 @@ async function onDelete() {
 
 <template>
   <div class="store-detail">
-    <div class="store-detail-header flex items-center gap-3 mb-1">
-      <h1 class="store-detail-title text-2xl font-semibold text-slate-900">
-        {{ store?.name }}
-      </h1>
+    <AdminDetailHeader :title="store?.name" back-to="/dashboard/stores" back-label="店舗一覧に戻る">
       <span
         v-if="store && !store.isActive"
-        class="store-detail-inactive-badge inline-flex items-center text-xs text-slate-700 bg-slate-100 border border-slate-300 px-2 py-0.5 rounded-sm"
+        class="inline-flex items-center text-xs text-slate-700 bg-slate-100 border border-slate-300 px-2 py-0.5 rounded-sm"
       >
         無効
       </span>
-    </div>
-    <p class="text-sm text-slate-600 mb-5">
-      <NuxtLink to="/dashboard/stores" class="store-detail-back text-blue-700 hover:text-blue-900 hover:underline">
-        ← 店舗一覧に戻る
-      </NuxtLink>
-    </p>
+    </AdminDetailHeader>
 
     <!-- 基本情報。ベッド管理は FormFields のカード枠内（#extra スロット）に差し込む -->
     <section class="store-detail-basic mb-8">
@@ -179,38 +171,29 @@ async function onDelete() {
     </section>
 
     <!-- 下部アクションバー: 更新 / キャンセル / 無効化 -->
-    <div class="store-detail-actions border-t border-[#dcdcde] pt-4 mt-2">
-      <UAlert
-        v-if="formError"
-        color="error"
-        icon="i-lucide-triangle-alert"
-        :title="formError"
-        class="mb-3"
-      />
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-3">
-          <button
-            type="button"
-            :disabled="submitting || deleting || !anyDirty"
-            class="store-detail-update px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:bg-slate-300 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-sm shadow-sm"
-            @click="onUpdate"
-          >
-            {{ submitting ? '保存中...' : '更新' }}
-          </button>
-          <NuxtLink
-            to="/dashboard/stores"
-            class="store-detail-cancel px-4 py-2 border border-[#8c8f94] bg-white hover:bg-[#f6f7f7] text-slate-700 text-sm rounded-sm"
-          >
-            キャンセル
-          </NuxtLink>
-          <span v-if="saved && !anyDirty" class="store-detail-saved text-sm text-green-700">
-            ✓ 保存しました
-          </span>
-          <span v-else-if="anyDirty" class="store-detail-dirty text-sm text-slate-500">
-            未保存の変更があります
-          </span>
-        </div>
+    <AdminDetailActions :error="formError">
+      <button
+        type="button"
+        :disabled="submitting || deleting || !anyDirty"
+        class="store-detail-update px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:bg-slate-300 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-sm shadow-sm"
+        @click="onUpdate"
+      >
+        {{ submitting ? '保存中...' : '更新' }}
+      </button>
+      <NuxtLink
+        to="/dashboard/stores"
+        class="store-detail-cancel px-4 py-2 border border-[#8c8f94] bg-white hover:bg-[#f6f7f7] text-slate-700 text-sm rounded-sm"
+      >
+        キャンセル
+      </NuxtLink>
+      <span v-if="saved && !anyDirty" class="store-detail-saved text-sm text-green-700">
+        ✓ 保存しました
+      </span>
+      <span v-else-if="anyDirty" class="store-detail-dirty text-sm text-slate-500">
+        未保存の変更があります
+      </span>
 
+      <template #danger>
         <button
           v-if="state.isActive"
           type="button"
@@ -220,7 +203,7 @@ async function onDelete() {
         >
           {{ deleting ? '無効化中...' : 'この店舗を無効化（ゴミ箱）' }}
         </button>
-      </div>
-    </div>
+      </template>
+    </AdminDetailActions>
   </div>
 </template>

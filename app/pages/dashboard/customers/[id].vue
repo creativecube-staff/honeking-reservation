@@ -259,10 +259,7 @@ async function saveNote() {
 
 <template>
   <div>
-    <div class="flex items-center gap-3 mb-1 flex-wrap">
-      <h1 class="text-2xl font-semibold text-slate-900">
-        {{ customer?.name ?? '(復号失敗)' }}
-      </h1>
+    <AdminDetailHeader :title="customer?.name ?? '(復号失敗)'" back-to="/dashboard/customers" back-label="顧客一覧に戻る">
       <span
         v-if="customer"
         class="inline-block px-2 py-0.5 text-xs font-semibold rounded border"
@@ -276,12 +273,7 @@ async function saveNote() {
       >
         {{ fmtJstDate(customer.withdrawnAt) }} に退会
       </span>
-    </div>
-    <p class="text-sm text-slate-600 mb-4">
-      <NuxtLink to="/dashboard/customers" class="text-blue-700 hover:text-blue-900 hover:underline">
-        ← 顧客一覧に戻る
-      </NuxtLink>
-    </p>
+    </AdminDetailHeader>
 
     <!-- 主要メトリクス（5カラム・PC で常に 1 行） -->
     <div v-if="customer" class="flex flex-nowrap gap-3 mb-5">

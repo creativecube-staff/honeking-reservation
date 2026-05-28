@@ -1,15 +1,43 @@
 <script setup lang="ts">
 import type { Bed } from '@prisma/client'
 
+// storeId あり = 既存店舗の編集（API で取得・追加・改名・無効化・削除）。
+// storeId なし = 新規作成の「下書きモード」（API を叩かず、作成予定のベッド名をローカルで編集し、
+//                親が getBedNames() で取り出して作成時にまとめて送る）。
 const props = defineProps<{
-  storeId: number
+  storeId?: number
+  /** 下書きモードの初期ベッド数（連番「ベッド1..N」で用意） */
+  initialBedCount?: number
 }>()
 
-const { data: beds, refresh, error } = await useFetch<Bed[]>(`/api/admin/stores/${props.storeId}/beds`, {
-  watch: false,
-})
+const isDraft = !props.storeId
+
+const { data: beds, refresh, error } = await useFetch<Bed[]>(
+  `/api/admin/stores/${props.storeId}/beds`,
+  // 下書きモードでは API を叩かない
+  { watch: false, immediate: !isDraft, default: () => [] as Bed[] },
+)
+
+// 下書きモード: 作成予定のベッド名リスト（初期数ぶん連番で用意）
+const draftBeds = ref<string[]>(
+  isDraft
+    ? Array.from({ length: Math.max(0, props.initialBedCount ?? 0) }, (_, i) => `ベッド${i + 1}`)
+    : [],
+)
+
+// 表示用に正規化した行（API モード=Bed / 下書きモード=ローカル名）。
+// draftIndex は下書きモードでの編集対象の添字（API モードは null）。
+type Row = { key: string | number, name: string, isActive: boolean, draftIndex: number | null }
+const rows = computed<Row[]>(() =>
+  isDraft
+    ? draftBeds.value.map((name, i) => ({ key: `d-${i}`, name, isActive: true, draftIndex: i }))
+    : (beds.value ?? []).map(b => ({ key: b.id, name: b.name, isActive: b.isActive, draftIndex: null })),
+)
 
 const counts = computed(() => {
+  if (isDraft) {
+    return { all: draftBeds.value.length, active: draftBeds.value.length, inactive: 0 }
+  }
   const list = beds.value ?? []
   return {
     all: list.length,
@@ -23,12 +51,31 @@ const bulkCount = ref(1)
 const bulkBusy = ref(false)
 const bulkError = ref<string | null>(null)
 
+// 既存の「ベッドN」名から次の連番を求める（サーバ側 bulk と同じ命名規則）
+function nextBedNumber(names: string[]): number {
+  let maxN = 0
+  for (const name of names) {
+    const m = name.match(/^ベッド(\d+)$/)
+    if (m) maxN = Math.max(maxN, Number(m[1]))
+  }
+  return maxN + 1
+}
+
 async function onBulkAdd() {
   bulkError.value = null
   if (bulkCount.value < 1 || bulkCount.value > 50) {
     bulkError.value = '1 〜 50 の範囲で指定してください'
     return
   }
+
+  // 下書きモード: ローカルに連番で追加
+  if (isDraft) {
+    const start = nextBedNumber(draftBeds.value)
+    for (let i = 0; i < bulkCount.value; i++) draftBeds.value.push(`ベッド${start + i}`)
+    bulkCount.value = 1
+    return
+  }
+
   bulkBusy.value = true
   try {
     await $fetch(`/api/admin/stores/${props.storeId}/beds`, {
@@ -50,13 +97,20 @@ async function onBulkAdd() {
 // ── 行アクション ────────────────────────────────────────
 const busy = ref<number | null>(null)
 
-async function onRename(bed: Bed) {
+async function onRename(row: Row) {
   // eslint-disable-next-line no-alert
-  const next = prompt('新しいベッド名を入力してください', bed.name)
-  if (next === null || next.trim() === '' || next === bed.name) return
-  busy.value = bed.id
+  const next = prompt('新しいベッド名を入力してください', row.name)
+  if (next === null || next.trim() === '' || next === row.name) return
+
+  // 下書きモード: ローカル名を書き換えるだけ
+  if (isDraft && row.draftIndex !== null) {
+    draftBeds.value[row.draftIndex] = next.trim()
+    return
+  }
+
+  busy.value = row.key as number
   try {
-    await $fetch(`/api/admin/stores/${props.storeId}/beds/${bed.id}`, {
+    await $fetch(`/api/admin/stores/${props.storeId}/beds/${row.key}`, {
       method: 'PATCH',
       body: { name: next.trim() },
     })
@@ -71,11 +125,11 @@ async function onRename(bed: Bed) {
   }
 }
 
-async function onDeactivate(bed: Bed) {
-  if (!confirm(`ベッド「${bed.name}」を無効化しますか？\n\n（一覧には残ります。後で「復活」で戻せます）`)) return
-  busy.value = bed.id
+async function onDeactivate(row: Row) {
+  if (!confirm(`ベッド「${row.name}」を無効化しますか？\n\n（一覧には残ります。後で「有効化」で戻せます）`)) return
+  busy.value = row.key as number
   try {
-    await $fetch(`/api/admin/stores/${props.storeId}/beds/${bed.id}`, {
+    await $fetch(`/api/admin/stores/${props.storeId}/beds/${row.key}`, {
       method: 'PATCH',
       body: { isActive: false },
     })
@@ -90,12 +144,18 @@ async function onDeactivate(bed: Bed) {
   }
 }
 
-async function onDelete(bed: Bed) {
-  if (!confirm(`ベッド「${bed.name}」を削除しますか？\n\n予約履歴がある場合は無効化のみされます（データ保護のため）。`)) return
-  busy.value = bed.id
+async function onDelete(row: Row) {
+  // 下書きモード: ローカルから取り除くだけ
+  if (isDraft && row.draftIndex !== null) {
+    draftBeds.value.splice(row.draftIndex, 1)
+    return
+  }
+
+  if (!confirm(`ベッド「${row.name}」を削除しますか？\n\n予約履歴がある場合は無効化のみされます（データ保護のため）。`)) return
+  busy.value = row.key as number
   try {
     const result = await $fetch<{ mode: 'deleted' | 'deactivated', reservationCount?: number }>(
-      `/api/admin/stores/${props.storeId}/beds/${bed.id}`,
+      `/api/admin/stores/${props.storeId}/beds/${row.key}`,
       { method: 'DELETE' },
     )
     await refresh()
@@ -112,10 +172,10 @@ async function onDelete(bed: Bed) {
   }
 }
 
-async function onActivate(bed: Bed) {
-  busy.value = bed.id
+async function onActivate(row: Row) {
+  busy.value = row.key as number
   try {
-    await $fetch(`/api/admin/stores/${props.storeId}/beds/${bed.id}`, {
+    await $fetch(`/api/admin/stores/${props.storeId}/beds/${row.key}`, {
       method: 'PATCH',
       body: { isActive: true },
     })
@@ -125,6 +185,13 @@ async function onActivate(bed: Bed) {
     busy.value = null
   }
 }
+
+// 下書きモードで親（新規作成フォーム）が作成時にベッド名を取り出すための getter
+function getBedNames(): string[] {
+  return draftBeds.value.map(n => n.trim()).filter(n => n !== '')
+}
+
+defineExpose({ getBedNames })
 </script>
 
 <template>
@@ -165,22 +232,22 @@ async function onActivate(bed: Bed) {
 
     <!-- コンパクトなベッド一覧（1 行 = 名前 + 状態 + ホバー操作） -->
     <div class="bg-white border border-[#c3c4c7] rounded-sm overflow-hidden">
-      <p v-if="(beds ?? []).length === 0" class="px-3 py-4 text-center text-sm text-slate-500">
+      <p v-if="rows.length === 0" class="px-3 py-4 text-center text-sm text-slate-500">
         まだベッドがありません。「+ ベッド追加」から追加してください。
       </p>
       <div
-        v-for="bed in beds"
-        :key="bed.id"
+        v-for="row in rows"
+        :key="row.key"
         class="group flex items-center gap-2 px-3 py-1.5 border-b border-[#f0f0f1] last:border-b-0 hover:bg-[#f6f7f7]"
       >
         <span
           class="font-medium text-slate-900"
-          :class="{ 'text-slate-400 line-through': !bed.isActive }"
+          :class="{ 'text-slate-400 line-through': !row.isActive }"
         >
-          {{ bed.name }}
+          {{ row.name }}
         </span>
         <span
-          v-if="!bed.isActive"
+          v-if="!row.isActive"
           class="text-xs text-slate-600 bg-slate-100 border border-slate-300 px-1.5 py-0.5 rounded-sm"
         >
           無効
@@ -190,37 +257,40 @@ async function onActivate(bed: Bed) {
         <span class="ml-auto text-xs text-slate-600 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1.5">
           <button
             type="button"
-            :disabled="busy === bed.id"
+            :disabled="busy === row.key"
             class="text-blue-700 hover:text-blue-900 hover:underline disabled:text-slate-400"
-            @click="onRename(bed)"
+            @click="onRename(row)"
           >
             名前
           </button>
+          <!-- 無効化/有効化は既存店舗（API モード）のみ。下書きは削除で取り除く -->
+          <template v-if="!isDraft">
+            <span class="text-slate-300">|</span>
+            <button
+              v-if="row.isActive"
+              type="button"
+              :disabled="busy === row.key"
+              class="text-amber-700 hover:text-amber-900 hover:underline disabled:text-slate-400"
+              @click="onDeactivate(row)"
+            >
+              無効化
+            </button>
+            <button
+              v-else
+              type="button"
+              :disabled="busy === row.key"
+              class="text-green-700 hover:text-green-900 hover:underline disabled:text-slate-400"
+              @click="onActivate(row)"
+            >
+              有効化
+            </button>
+          </template>
           <span class="text-slate-300">|</span>
           <button
-            v-if="bed.isActive"
             type="button"
-            :disabled="busy === bed.id"
-            class="text-amber-700 hover:text-amber-900 hover:underline disabled:text-slate-400"
-            @click="onDeactivate(bed)"
-          >
-            無効化
-          </button>
-          <button
-            v-else
-            type="button"
-            :disabled="busy === bed.id"
-            class="text-green-700 hover:text-green-900 hover:underline disabled:text-slate-400"
-            @click="onActivate(bed)"
-          >
-            復活
-          </button>
-          <span class="text-slate-300">|</span>
-          <button
-            type="button"
-            :disabled="busy === bed.id"
+            :disabled="busy === row.key"
             class="text-red-700 hover:text-red-900 hover:underline disabled:text-slate-400"
-            @click="onDelete(bed)"
+            @click="onDelete(row)"
           >
             削除
           </button>

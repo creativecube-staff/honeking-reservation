@@ -224,7 +224,7 @@ const dateFmt = new Intl.DateTimeFormat('ja-JP', {
                   class="text-green-700 hover:text-green-900 hover:underline disabled:text-slate-400"
                   @click="activate(s)"
                 >
-                  復活
+                  有効化
                 </button>
               </div>
             </td>

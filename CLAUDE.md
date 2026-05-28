@@ -372,6 +372,14 @@ URL に状態を載せる方針(リロードに強く、シェア可能、戻る
 - `app/components/Base/PillTabs.vue` - ピル形タブボタン(顧客タブ・予約ステータスタブで利用)。
 - `app/components/Base/Pagination.vue` - 一覧画面の共通ページネーション。
 - `app/components/Calendar/TimeColumnCalendar.vue` - 縦軸=時刻のカレンダー(シフト・スケジュールビューで流用)。
+- `app/components/Admin/DetailHeader.vue` - 管理画面の共通ページ見出し(`<AdminDetailHeader>`)。左オレンジアクセントバー + 太字タイトル + バッジ(default slot)+ 右寄せ `#actions` + 下段(詳細ページ=戻るリンク `back-to`/`back-label` / 一覧ページ=説明文 `description` か `#description`)。詳細・一覧どちらのページでも使う。
+- `app/components/Admin/BackLink.vue` - 一覧へ戻るリンク(`<AdminBackLink>`)。矢印を丸背景に入れ hover でアクセント色、`accent` で orange/muted 切替。DetailHeader が内部利用。
+- `app/components/Admin/DetailActions.vue` - 詳細ページ下部の共通アクションバー(`<AdminDetailActions>`)。区切り線 + エラー表示 + 左=主操作(default slot)/ `#danger`=破壊的操作。`bordered` で上罫線の有無を切替(フォーム内に置くときは false)。
+- `app/components/Admin/Menu/Manager.vue` - 共通メニュー / 店舗特別メニュー管理を 1 コンポーネントに集約(`<AdminMenuManager>`)。`storeId` 無=共通(`/api/admin/menus`)/有=その店舗(`/api/admin/stores/{id}/menus`)。一覧・あいまい検索・ステータスタブ・編集モーダル・CRUD 全部入り。文言は storeId から自動で出し分け。
+- `app/components/Admin/Store/BedsTab.vue` / `app/components/Admin/Schedule/BusinessHoursPanel.vue` - `storeId` 省略で「下書きモード」(API を叩かずローカル編集 → 親が `getBedNames()` / `getRanges()` で取り出す)。新規店舗作成ページ(`stores/new.vue`)が利用し、作成 API のトランザクションで Store + アカウント + ベッド + 営業時間を一括作成する。
+- `shared/businessHours.ts` - 全店共通の標準営業時間 `DEFAULT_BUSINESS_HOUR_RANGES`(新規店舗作成時の初期値)。
+- 管理画面テーブルの共通クラス: `admin-table` / `admin-table-wrap` / `admin-table-head` / `admin-table-body` / `admin-table-row`(縦罫線は点線)。一覧の絞り込みは「ステータスタブ + あいまい検索(名前等の部分一致・スペース区切りで AND)」、件数が多い列は見出しクリックでソート(店舗一覧の都道府県 / 市区町村 / 表示順)。
+- 一覧の再活性ボタンの文言は「有効化」(無効化と対)に統一。「復活」は使わない。
 
 ## 重要なコマンド
 

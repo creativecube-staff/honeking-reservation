@@ -3,8 +3,11 @@ import type { CalendarColumn, CalendarRange } from '../../Calendar/types'
 import type { BusinessHourRangeInput } from '~~/shared/schemas/businessHour'
 import { businessHoursBulkSchema } from '~~/shared/schemas/businessHour'
 
+// storeId あり = 既存店舗の編集（API から取得・PUT で保存。親が save()/reset() を呼ぶ）。
+// storeId なし = 新規作成の「下書きモード」（API を叩かず initialRanges から編集し、親が getRanges() で取り出す）。
 const props = defineProps<{
-  storeId: number
+  storeId?: number
+  initialRanges?: BusinessHourRangeInput[]
 }>()
 
 // 保存は親（店舗詳細の最下部「更新」ボタン）が制御する。
@@ -15,7 +18,8 @@ type ApiRow = { id: number, dayOfWeek: number, startTime: string, endTime: strin
 
 const { data: apiRows, refresh, error } = await useFetch<ApiRow[]>(
   () => `/api/admin/stores/${props.storeId}/business-hours`,
-  { watch: [() => props.storeId] },
+  // 下書きモード（storeId なし）では API を叩かない
+  { watch: [() => props.storeId], immediate: !!props.storeId, default: () => [] as ApiRow[] },
 )
 
 // ── 曜日定義（縦カレンダーの列）─────────────────────
@@ -63,8 +67,19 @@ function loadFromApi() {
   }))
   baseline.value = serialize(ranges.value)
 }
-// apiRows が変わったときだけ再ロード（ranges を依存に含めないため watchEffect は使わない）
-watch(apiRows, () => loadFromApi(), { immediate: true })
+// API モード: apiRows が変わったときだけ再ロード（ranges を依存に含めないため watchEffect は使わない）
+watch(apiRows, () => { if (props.storeId) loadFromApi() }, { immediate: true })
+
+// 下書きモード: 初期レンジ（標準営業時間など）から 1 度だけ組み立てる
+if (!props.storeId) {
+  ranges.value = (props.initialRanges ?? []).map(r => ({
+    id: newId(),
+    columnId: r.dayOfWeek,
+    startTime: r.startTime,
+    endTime: r.endTime,
+  }))
+  baseline.value = serialize(ranges.value)
+}
 
 // 変更有無。親へ随時通知する。
 const isDirty = computed(() => serialize(ranges.value) !== baseline.value)
@@ -115,7 +130,16 @@ function reset() {
   loadFromApi()
 }
 
-defineExpose({ save, reset })
+// 下書きモードで親（新規作成フォーム）が作成時にレンジを取り出すための getter
+function getRanges(): BusinessHourRangeInput[] {
+  return ranges.value.map(r => ({
+    dayOfWeek: r.columnId as number,
+    startTime: r.startTime,
+    endTime: r.endTime,
+  }))
+}
+
+defineExpose({ save, reset, getRanges })
 </script>
 
 <template>

@@ -133,10 +133,7 @@ async function resetPassword() {
 
 <template>
   <div>
-    <div class="flex items-center gap-3 mb-1">
-      <h1 class="text-2xl font-semibold text-slate-900">
-        {{ staff?.name }}
-      </h1>
+    <AdminDetailHeader :title="staff?.name" back-to="/dashboard/staff" back-label="スタッフ一覧に戻る">
       <span v-if="isSelf" class="text-xs text-slate-500">(あなた)</span>
       <span
         v-if="staff && !staff.isActive"
@@ -144,12 +141,7 @@ async function resetPassword() {
       >
         無効
       </span>
-    </div>
-    <p class="text-sm text-slate-600 mb-4">
-      <NuxtLink to="/dashboard/staff" class="text-blue-700 hover:text-blue-900 hover:underline">
-        ← スタッフ一覧に戻る
-      </NuxtLink>
-    </p>
+    </AdminDetailHeader>
 
     <UAlert
       v-if="formError"
@@ -169,33 +161,33 @@ async function resetPassword() {
     <form class="space-y-4" @submit.prevent="onSubmit">
       <AdminStaffFormFields :state="state" :field-errors="fieldErrors" :show-password-field="false" />
 
-      <div class="flex items-center justify-between pt-2">
-        <div class="flex items-center gap-2">
-          <button
-            type="submit"
-            :disabled="submitting || deleting"
-            class="px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white text-sm font-semibold rounded-sm shadow-sm"
-          >
-            {{ submitting ? '保存中...' : '更新' }}
-          </button>
-          <NuxtLink
-            to="/dashboard/staff"
-            class="px-4 py-2 border border-[#8c8f94] bg-white hover:bg-[#f6f7f7] text-slate-700 text-sm rounded-sm"
-          >
-            キャンセル
-          </NuxtLink>
-        </div>
-
+      <AdminDetailActions :bordered="false">
         <button
-          v-if="state.isActive && !isSelf"
-          type="button"
+          type="submit"
           :disabled="submitting || deleting"
-          class="px-3 py-1.5 text-sm text-red-700 hover:text-red-900 hover:underline disabled:text-slate-400"
-          @click="onDelete"
+          class="px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white text-sm font-semibold rounded-sm shadow-sm"
         >
-          {{ deleting ? '無効化中...' : 'このスタッフを無効化' }}
+          {{ submitting ? '保存中...' : '更新' }}
         </button>
-      </div>
+        <NuxtLink
+          to="/dashboard/staff"
+          class="px-4 py-2 border border-[#8c8f94] bg-white hover:bg-[#f6f7f7] text-slate-700 text-sm rounded-sm"
+        >
+          キャンセル
+        </NuxtLink>
+
+        <template #danger>
+          <button
+            v-if="state.isActive && !isSelf"
+            type="button"
+            :disabled="submitting || deleting"
+            class="px-3 py-1.5 text-sm text-red-700 hover:text-red-900 hover:underline disabled:text-slate-400"
+            @click="onDelete"
+          >
+            {{ deleting ? '無効化中...' : 'このスタッフを無効化' }}
+          </button>
+        </template>
+      </AdminDetailActions>
     </form>
 
     <!-- パスワード再設定 -->

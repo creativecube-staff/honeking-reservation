@@ -16,8 +16,21 @@ const { data: stores, refresh, error } = await useFetch<Store[]>('/api/admin/sto
   query: { status: 'all' },
 })
 
+// あいまい検索: 店舗名・スラッグ・都道府県・市区町村を対象に部分一致（スペース区切りで AND）。
+// 件数が増えても素早く目的の店舗に辿り着けるようにする。データ自体は少数なのでクライアント側で絞る。
+const keyword = ref('')
+function matchesKeyword(s: Store): boolean {
+  const kw = keyword.value.trim().toLowerCase()
+  if (!kw) return true
+  const haystack = `${s.name} ${s.slug} ${s.prefecture} ${s.city}`.toLowerCase()
+  return kw.split(/\s+/).every(term => haystack.includes(term))
+}
+
+// 検索で絞った母集合。ステータスタブの件数もこの母集合に対して数える（検索に追従させる）。
+const searched = computed(() => (stores.value ?? []).filter(matchesKeyword))
+
 const counts = computed(() => {
-  const list = stores.value ?? []
+  const list = searched.value
   return {
     all: list.length,
     active: list.filter(s => s.isActive).length,
@@ -26,10 +39,37 @@ const counts = computed(() => {
 })
 
 const filtered = computed(() => {
-  const list = stores.value ?? []
+  const list = searched.value
   if (status.value === 'active') return list.filter(s => s.isActive)
   if (status.value === 'inactive') return list.filter(s => !s.isActive)
   return list
+})
+
+// 列ヘッダークリックでソート（都道府県・市区町村・表示順）。同じ列を再クリックで昇順⇔降順。
+type SortKey = 'prefecture' | 'city' | 'displayOrder'
+const sortKey = ref<SortKey | null>(null)
+const sortDir = ref<'asc' | 'desc'>('asc')
+
+function toggleSort(key: SortKey) {
+  if (sortKey.value === key) {
+    sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc'
+  }
+  else {
+    sortKey.value = key
+    sortDir.value = 'asc'
+  }
+}
+
+const sorted = computed(() => {
+  const list = [...filtered.value]
+  const key = sortKey.value
+  if (!key) return list
+  const dir = sortDir.value === 'asc' ? 1 : -1
+  return list.sort((a, b) => {
+    if (key === 'displayOrder') return (a.displayOrder - b.displayOrder) * dir
+    // 都道府県・市区町村は日本語ロケールで比較
+    return String(a[key]).localeCompare(String(b[key]), 'ja') * dir
+  })
 })
 
 const tabs: { v: Status, label: string }[] = [
@@ -200,39 +240,46 @@ const dateFmt = new Intl.DateTimeFormat('ja-JP', {
 
     <!-- 管理者(全店)モード: 店舗一覧 -->
     <template v-else>
-    <div class="flex items-center gap-3 mb-1">
-      <h1 class="text-2xl font-semibold text-slate-900">
-        店舗管理
-      </h1>
+    <AdminDetailHeader title="店舗管理" description="店舗の追加・編集・無効化を行います。">
+      <!-- 新規追加はタイトルの隣（バッジ位置）に置く -->
       <NuxtLink
         to="/dashboard/stores/new"
         class="inline-flex items-center px-3 py-1 border border-[#8c8f94] bg-[#f6f7f7] hover:bg-white text-slate-700 hover:text-slate-900 text-sm rounded-sm"
       >
         新規追加
       </NuxtLink>
-    </div>
-    <p class="text-sm text-slate-600 mb-4">
-      店舗の追加・編集・無効化を行います。
-    </p>
+    </AdminDetailHeader>
 
-    <!-- WP 風ステータスフィルタ（subsubsub） -->
-    <ul class="text-sm mb-3 flex items-center">
-      <li v-for="(tab, i) in tabs" :key="tab.v" class="flex items-center">
-        <button
-          class="hover:underline"
-          :class="status === tab.v
-            ? 'text-slate-900 font-semibold'
-            : 'text-blue-700 hover:text-blue-900'"
-          @click="status = tab.v"
+    <!-- ステータスフィルタ（左）+ あいまい検索（右） -->
+    <div class="flex items-center justify-between gap-3 mb-3 flex-wrap">
+      <ul class="text-sm flex items-center">
+        <li v-for="(tab, i) in tabs" :key="tab.v" class="flex items-center">
+          <button
+            class="hover:underline"
+            :class="status === tab.v
+              ? 'text-slate-900 font-semibold'
+              : 'text-blue-700 hover:text-blue-900'"
+            @click="status = tab.v"
+          >
+            {{ tab.label }}
+            <span :class="status === tab.v ? 'text-slate-500' : 'text-slate-400'">
+              ({{ counts[tab.v] }})
+            </span>
+          </button>
+          <span v-if="i < tabs.length - 1" class="text-slate-300 mx-2">|</span>
+        </li>
+      </ul>
+
+      <div class="admin-table-search relative">
+        <UIcon name="i-lucide-search" class="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-slate-400 pointer-events-none" />
+        <input
+          v-model="keyword"
+          type="search"
+          placeholder="店舗名・スラッグ・地域で検索"
+          class="w-64 max-w-full pl-8 pr-2.5 py-1.5 text-sm border border-[#8c8f94] rounded-sm bg-white focus:outline-none focus:border-orange-500"
         >
-          {{ tab.label }}
-          <span :class="status === tab.v ? 'text-slate-500' : 'text-slate-400'">
-            ({{ counts[tab.v] }})
-          </span>
-        </button>
-        <span v-if="i < tabs.length - 1" class="text-slate-300 mx-2">|</span>
-      </li>
-    </ul>
+      </div>
+    </div>
 
     <!-- エラー -->
     <UAlert
@@ -243,11 +290,15 @@ const dateFmt = new Intl.DateTimeFormat('ja-JP', {
       class="mb-3"
     />
 
-    <!-- WP 風テーブル -->
-    <div class="bg-white border border-[#c3c4c7] rounded-sm shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-x-auto">
-      <table class="w-full text-sm">
-        <thead class="bg-[#f6f7f7] text-slate-900">
-          <tr>
+    <!-- 店舗テーブル -->
+    <div class="admin-table-wrap bg-white border border-[#c3c4c7] rounded-sm shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-x-auto">
+      <table
+        class="admin-table w-full text-sm
+          [&_th]:[border-right:1px_dotted_#c3c4c7] [&_td]:[border-right:1px_dotted_#c3c4c7]
+          [&_th:last-child]:[border-right:none] [&_td:last-child]:[border-right:none]"
+      >
+        <thead class="admin-table-head bg-[#f6f7f7] text-slate-900">
+          <tr class="admin-table-head-row">
             <th class="px-3 py-2.5 text-left font-semibold border-b border-[#c3c4c7]">
               店舗名
             </th>
@@ -255,13 +306,34 @@ const dateFmt = new Intl.DateTimeFormat('ja-JP', {
               スラッグ
             </th>
             <th class="px-3 py-2.5 text-left font-semibold border-b border-[#c3c4c7]">
-              都道府県
+              <button type="button" class="inline-flex items-center gap-1 hover:text-orange-700" @click="toggleSort('prefecture')">
+                都道府県
+                <span class="text-[10px]" :class="sortKey === 'prefecture' ? 'text-orange-600' : 'text-slate-300'">
+                  {{ sortKey === 'prefecture' ? (sortDir === 'asc' ? '▲' : '▼') : '↕' }}
+                </span>
+              </button>
             </th>
             <th class="px-3 py-2.5 text-left font-semibold border-b border-[#c3c4c7]">
-              市区町村
+              <button type="button" class="inline-flex items-center gap-1 hover:text-orange-700" @click="toggleSort('city')">
+                市区町村
+                <span class="text-[10px]" :class="sortKey === 'city' ? 'text-orange-600' : 'text-slate-300'">
+                  {{ sortKey === 'city' ? (sortDir === 'asc' ? '▲' : '▼') : '↕' }}
+                </span>
+              </button>
+            </th>
+            <th class="px-3 py-2.5 text-left font-semibold border-b border-[#c3c4c7]">
+              電話番号
+            </th>
+            <th class="px-3 py-2.5 text-left font-semibold border-b border-[#c3c4c7]">
+              メールアドレス
             </th>
             <th class="px-3 py-2.5 text-right font-semibold border-b border-[#c3c4c7]">
-              表示順
+              <button type="button" class="inline-flex items-center gap-1 hover:text-orange-700" @click="toggleSort('displayOrder')">
+                表示順
+                <span class="text-[10px]" :class="sortKey === 'displayOrder' ? 'text-orange-600' : 'text-slate-300'">
+                  {{ sortKey === 'displayOrder' ? (sortDir === 'asc' ? '▲' : '▼') : '↕' }}
+                </span>
+              </button>
             </th>
             <th class="px-3 py-2.5 text-left font-semibold border-b border-[#c3c4c7]">
               状態
@@ -271,16 +343,16 @@ const dateFmt = new Intl.DateTimeFormat('ja-JP', {
             </th>
           </tr>
         </thead>
-        <tbody>
-          <tr v-if="filtered.length === 0">
-            <td colspan="7" class="px-3 py-6 text-center text-slate-500">
-              該当する店舗はありません。
+        <tbody class="admin-table-body">
+          <tr v-if="sorted.length === 0" class="admin-table-empty">
+            <td colspan="9" class="px-3 py-6 text-center text-slate-500">
+              {{ keyword.trim() ? '検索条件に一致する店舗はありません。' : '該当する店舗はありません。' }}
             </td>
           </tr>
           <tr
-            v-for="s in filtered"
+            v-for="s in sorted"
             :key="s.id"
-            class="group border-b border-[#f0f0f1] last:border-b-0 hover:bg-[#f6f7f7]"
+            class="admin-table-row group border-b border-[#f0f0f1] last:border-b-0 hover:bg-[#f6f7f7]"
           >
             <td class="px-3 py-2.5 align-top">
               <NuxtLink
@@ -312,7 +384,7 @@ const dateFmt = new Intl.DateTimeFormat('ja-JP', {
                   class="text-green-700 hover:text-green-900 hover:underline disabled:text-slate-400"
                   @click="activate(s.id)"
                 >
-                  復活
+                  有効化
                 </button>
                 <!-- 完全削除（物理削除）は無効化済みの店舗のみ -->
                 <template v-if="!s.isActive">
@@ -334,6 +406,12 @@ const dateFmt = new Intl.DateTimeFormat('ja-JP', {
             </td>
             <td class="px-3 py-2.5 align-top">
               {{ s.city }}
+            </td>
+            <td class="px-3 py-2.5 align-top text-slate-700 tabular-nums whitespace-nowrap">
+              {{ s.phone || '—' }}
+            </td>
+            <td class="px-3 py-2.5 align-top text-slate-700 break-all">
+              {{ s.email || '—' }}
             </td>
             <td class="px-3 py-2.5 align-top text-right tabular-nums">
               {{ s.displayOrder }}

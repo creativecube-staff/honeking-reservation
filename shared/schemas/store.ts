@@ -1,5 +1,7 @@
 import { z } from 'zod'
 import { isReservedSlug } from '../reservedSlugs'
+import { bedNameSchema } from './bed'
+import { businessHourRangeSchema } from './businessHour'
 
 // Store の共通バリデーションスキーマ。client（フォーム）と server（API）両方で使う。
 export const storeBaseSchema = z.object({
@@ -25,6 +27,16 @@ export const storeBaseSchema = z.object({
 export const createStoreSchema = storeBaseSchema.extend({
   isActive: z.boolean().default(true),
   displayOrder: z.number().int().min(0).max(9999).default(0),
+  // 作成時の初期セットアップ（Store 本体とは別に、サーバ側で分離して使う）。
+  // beds: 作成するベッド名の配列（同名は不可） / businessHours: 営業時間レンジをまとめて作成
+  beds: z
+    .array(bedNameSchema)
+    .max(50, 'ベッドは 50 台までです')
+    .default([])
+    .refine(names => new Set(names).size === names.length, {
+      message: 'ベッド名が重複しています',
+    }),
+  businessHours: z.array(businessHourRangeSchema).default([]),
 })
 
 export const updateStoreSchema = storeBaseSchema.partial()

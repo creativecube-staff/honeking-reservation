@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { createStoreSchema, type CreateStoreInput } from '~~/shared/schemas/store'
+import { DEFAULT_BUSINESS_HOUR_RANGES } from '~~/shared/businessHours'
+import type { BusinessHourRangeInput } from '~~/shared/schemas/businessHour'
 
 definePageMeta({ layout: 'admin' })
 
@@ -19,6 +21,10 @@ const fieldErrors = ref<Record<string, string>>({})
 const formError = ref<string | null>(null)
 const submitting = ref(false)
 
+// 初期セットアップ: ベッド（下書き BedsTab から名前を取得）と営業時間（下書きパネルから取得）
+const bedsTab = ref<{ getBedNames: () => string[] } | null>(null)
+const hoursPanel = ref<{ getRanges: () => BusinessHourRangeInput[] } | null>(null)
+
 // 作成完了後に 1 回だけ表示する自動発行ログイン情報（平文パスワードを含む）
 type CreatedAccount = { username: string, password: string }
 const createdAccount = ref<CreatedAccount | null>(null)
@@ -33,6 +39,8 @@ async function onSubmit() {
     ...state,
     phone: state.phone && String(state.phone).trim() !== '' ? state.phone : null,
     email: state.email && String(state.email).trim() !== '' ? state.email : null,
+    beds: bedsTab.value?.getBedNames() ?? [],
+    businessHours: hoursPanel.value?.getRanges() ?? [],
   }
 
   const parsed = createStoreSchema.safeParse(payload)
@@ -84,16 +92,7 @@ async function copyCredentials() {
 
 <template>
   <div>
-    <div class="flex items-center gap-3 mb-1">
-      <h1 class="text-2xl font-semibold text-slate-900">
-        新規店舗を追加
-      </h1>
-    </div>
-    <p class="text-sm text-slate-600 mb-4">
-      <NuxtLink to="/dashboard/stores" class="text-blue-700 hover:text-blue-900 hover:underline">
-        ← 店舗一覧に戻る
-      </NuxtLink>
-    </p>
+    <AdminDetailHeader title="新規店舗を追加" back-to="/dashboard/stores" back-label="店舗一覧に戻る" />
 
     <UAlert
       v-if="formError"
@@ -108,9 +107,27 @@ async function copyCredentials() {
         :state="state"
         :field-errors="fieldErrors"
         @update:state="(v) => Object.assign(state, v)"
-      />
+      >
+        <template #extra>
+          <!-- ベッド: 編集ページと同じ BedsTab（下書きモード）。初期 4 台を連番で用意 -->
+          <div class="store-new-beds">
+            <h3 class="store-new-beds-title text-sm font-semibold text-slate-700 mb-2">
+              ベッド
+            </h3>
+            <AdminStoreBedsTab ref="bedsTab" :initial-bed-count="4" />
+          </div>
+        </template>
+      </AdminStoreFormFields>
 
-      <div class="flex items-center gap-2 pt-2">
+      <!-- 営業時間: 標準値を初期表示（ドラッグで編集可）。作成後も店舗詳細で変更できる -->
+      <section>
+        <h2 class="text-lg font-semibold text-slate-900 mb-3">
+          営業時間
+        </h2>
+        <AdminScheduleBusinessHoursPanel ref="hoursPanel" :initial-ranges="DEFAULT_BUSINESS_HOUR_RANGES" />
+      </section>
+
+      <AdminDetailActions :bordered="false">
         <button
           type="submit"
           :disabled="submitting"
@@ -124,7 +141,7 @@ async function copyCredentials() {
         >
           キャンセル
         </NuxtLink>
-      </div>
+      </AdminDetailActions>
     </form>
 
     <!-- 作成完了: 自動発行したログイン情報を 1 回だけ表示する -->
